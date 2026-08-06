@@ -1,5 +1,6 @@
-# arm64-specific kernel config overrides for Proxmox VE
+# arm64-specific kernel config overrides for Proxmox VE on Apple silicon
 #
-# The base config comes from Ubuntu's arm64 annotations which already
-# include good server defaults (NUMA, ACPI, EFI, KVM, NR_CPUS=512).
+# The base config comes from Ubuntu Asahi's asahi-arm annotations
+# (debian.asahi-arm), which already enable Apple SoC drivers, DRM Asahi,
+# 16K pages where required by the flavour, and related options.
 # Common PVE options are in config-common.opts.

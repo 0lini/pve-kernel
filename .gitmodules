@@ -1,6 +1,7 @@
 [submodule "submodules/zfsonlinux"]
 	path = submodules/zfsonlinux
 	url = ../zfsonlinux
-[submodule "submodules/ubuntu-kernel"]
-	path = submodules/ubuntu-kernel
-	url = ../mirror_ubuntu-kernels
+[submodule "submodules/asahi-kernel"]
+	path = submodules/asahi-kernel
+	url = https://github.com/UbuntuAsahi/linux.git
+	branch = asahi-arm-7.0

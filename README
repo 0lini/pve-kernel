@@ -1,17 +1,18 @@
 KERNEL SOURCE:
 ==============
 
-We currently use the Ubuntu kernel sources, available from our mirror:
+We currently use the Ubuntu Asahi kernel sources (Asahi Linux rebased onto
+Ubuntu kernel packaging), which provide Apple silicon support:
 
- https://git.proxmox.com/?p=mirror_ubuntu-kernels.git;a=summary
+ https://github.com/UbuntuAsahi/linux
+ https://github.com/UbuntuAsahi/ubuntu-asahi/wiki/Kernel-packaging
 
-Ubuntu will maintain those kernels till:
+Upstream Asahi Linux kernel releases:
 
- https://wiki.ubuntu.com/Kernel/Dev/ExtendedStable
- or
- https://pve.proxmox.com/pve-docs/chapter-pve-faq.html#faq-support-table
+ https://github.com/AsahiLinux/linux
 
- whatever happens to be earlier.
+The submodule tracks Ubuntu Asahi packaging tags such as
+`Ubuntu-asahi-arm-7.0.0-1002.2` (flavour `asahi-arm`, architecture arm64).
 
 
 Additional/Updated Modules:
@@ -63,7 +64,7 @@ Package Build
 
 For simple KConfig modifications you can adapt the list in `debian/rules` file.
 For quick code changes to the actual kernel code you can do them directly in
-the submodule/ubuntu-kernels directory, then re-create the build-directory, e.g.:
+the submodule/asahi-kernel directory, then re-create the build-directory, e.g.:
 
  make clean
  # now build again, explicitly creating the build-dir isn't required anymore
@@ -75,9 +76,9 @@ Modify-Build-Test Cycles
 ------------------------
 
 Ideally you avoid the need for doing a full package build and just directly
-build linux from the ubuntu-kernels or the mainline (stable) repo with copying
-over a build-config of a proxmox-kernel to that as .config and then using the
-`make olddefconfig` target.
+build linux from the asahi-kernel submodule with copying over a build-config
+of a proxmox-kernel to that as .config and then using the `make olddefconfig`
+target.
 
 If you need full package builds you can try to make changes inside the
 BUILD-DIR directly and then continue build from there, e.g., using
@@ -96,7 +97,7 @@ get applied with the `patch` tool. From a git point-of-view, the copied
 directory remains clean even with extra patches applied since it does not
 contain a .git directory, but a reference to the (still pristine) submodule:
 
-$ cat build/ubuntu-kernel/.git
+$ cat build/asahi-kernel/.git
 
 If you mistakenly cloned the upstream repo as "normal" clone (not via the
 submodule mechanics) this means that you have a real .git directory with its
@@ -108,7 +109,7 @@ artefacts and let's then the build fail on packaging.
 
 So always ensure that you really checked it out as submodule, not as full
 "normal" clone. You can also explicitly set the LOCALVERSION variable to
-undefined with: `export LOCALVERSION= but that should only be done for test
+undefined with: `export LOCALVERSION=` but that should only be done for test
 builds.
 
 RELATED PACKAGES:
@@ -195,8 +196,8 @@ even if both builds are of the same kernel and package version.
 Additional information
 ----------------------
 
-We use the default configuration provided by Ubuntu, and apply
-the following modifications:
+We use the default configuration provided by Ubuntu Asahi (asahi-arm flavour
+annotations), and apply the following modifications:
 
 NOTE: For the exact and current list see debian/rules (PVE_CONFIG_OPTS)
 
@@ -251,3 +252,14 @@ NOTE: For the exact and current list see debian/rules (PVE_CONFIG_OPTS)
   the recently introduced ORC_UNWINDER is not 100% stable yet, especially in combination with ZFS
 
 - enable CONFIG_PAGE_TABLE_ISOLATION (Meltdown mitigation)
+
+Apple silicon notes
+-------------------
+
+- Only arm64 is supported.
+- Apple DTBs are installed under `/usr/lib/modules/<kvname>/dtbs/`.
+- Booting on Apple hardware still requires the rest of the Asahi/Ubuntu Asahi
+  userspace stack (m1n1, U-Boot, firmware, etc.); this package only provides
+  the kernel/modules/headers packaging for Proxmox.
+- x86-specific historical PVE patches live under `patches/kernel-x86/` and are
+  not applied on this Asahi-based tree.
