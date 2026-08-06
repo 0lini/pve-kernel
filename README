@@ -261,5 +261,5 @@ Apple silicon notes
 - Booting on Apple hardware still requires the rest of the Asahi/Ubuntu Asahi
   userspace stack (m1n1, U-Boot, firmware, etc.); this package only provides
   the kernel/modules/headers packaging for Proxmox.
-- x86-specific historical PVE patches live under `patches/kernel-x86/` and are
-  not applied on this Asahi-based tree.
+- Historical x86/Ubuntu-SAUCE PVE patches from the generic Ubuntu base were
+  dropped; recover them from git history if amd64 support is restored.

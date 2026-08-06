@@ -6,7 +6,7 @@ proxmox-kernel-7.0 (7.0.12-1) trixie; urgency=medium
   * Limit supported architecture to arm64 (asahi-arm flavour).
   * Export base config from debian.asahi-arm annotations.
   * Install Apple device trees into the kernel module directory.
-  * Drop applying x86/Ubuntu-SAUCE-only patches (kept under patches/kernel-x86/).
+  * Drop x86/Ubuntu-SAUCE-only patches that do not apply on asahi-arm.
   * Bump package version to 7.0.12-1 for the new Asahi-based ABI.
 
  -- Oliver Elsner <oliver.elsner@lvndl.de>  Thu, 06 Aug 2026 22:40:00 +0200
