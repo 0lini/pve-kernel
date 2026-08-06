@@ -4,3 +4,6 @@
 # (debian.asahi-arm), which already enable Apple SoC drivers, DRM Asahi,
 # 16K pages where required by the flavour, and related options.
 # Common PVE options are in config-common.opts.
+
+# RUST (needed for DRM Asahi) requires GENDWARFKSYMS when MODVERSIONS is on
+-e CONFIG_GENDWARFKSYMS

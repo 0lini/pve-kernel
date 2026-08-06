@@ -24,13 +24,18 @@ KVNAME=$(KERNEL_VER)$(EXTRAVERSION)
 PACKAGE=proxmox-kernel-$(KVNAME)
 HDRPACKAGE=proxmox-headers-$(KVNAME)
 
-ARCH=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+# Target architecture. Override for cross builds, e.g.:
+#   make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- deb
+ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 
 # Ubuntu Asahi / Asahi Linux targets Apple silicon (arm64)
 SUPPORTED_ARCHS = arm64
 ifeq ($(filter $(ARCH),$(SUPPORTED_ARCHS)),)
 $(error Unsupported architecture: $(ARCH). Supported: $(SUPPORTED_ARCHS))
 endif
+
+# Cross-compile prefix (empty for native builds)
+CROSS_COMPILE ?=
 
 # map Debian arch to kernel source arch directory name
 KERNEL_ARCH_arm64 = arm64
@@ -108,7 +113,10 @@ debian.prepared: debian
 	@$(foreach dir, $(DIRS),echo "$(dir)=$($(dir))" >> $(BUILD_DIR)/debian/rules.d/env.mk;)
 	echo "KVNAME=$(KVNAME)" >> $(BUILD_DIR)/debian/rules.d/env.mk
 	echo "KERNEL_MAJMIN=$(KERNEL_MAJMIN)" >> $(BUILD_DIR)/debian/rules.d/env.mk
-	cd $(BUILD_DIR); debian/rules debian/control
+	echo "CROSS_COMPILE=$(CROSS_COMPILE)" >> $(BUILD_DIR)/debian/rules.d/env.mk
+	cd $(BUILD_DIR); \
+	  DEB_HOST_ARCH=$(ARCH) DEB_BUILD_ARCH=$(shell dpkg-architecture -qDEB_BUILD_ARCH) \
+	  debian/rules debian/control
 	touch $@
 
 $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
