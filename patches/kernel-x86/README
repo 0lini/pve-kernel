@@ -1,9 +1,0 @@
-# x86 / Ubuntu-generic-only patches
-
-These patches were carried when this packaging tracked the Ubuntu generic
-kernel for amd64. They are not applied when building against Ubuntu Asahi
-(`asahi-arm` on arm64), because they target x86 KVM (SVM/VMX/EPT), Intel
-IOMMU Ubuntu SAUCE, or AMD display code that is not relevant for Apple silicon.
-
-Keep them here for reference if amd64 support is restored later, or if
-individual fixes are ported to a different base.
