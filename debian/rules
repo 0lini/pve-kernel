@@ -257,8 +257,13 @@ endif
 
 $(MODULES)/zfs.ko: .compile_mark
 	cd $(MODULES)/$(ZFSDIR); ./autogen.sh
-	cd $(MODULES)/$(ZFSDIR); ./configure --with-config=kernel --with-linux=$(BUILD_DIR)/$(KERNEL_SRC) --with-linux-obj=$(BUILD_DIR)/$(KERNEL_SRC)
-	$(MAKE) -C $(MODULES)/$(ZFSDIR)
+	cd $(MODULES)/$(ZFSDIR); \
+	  ./configure --with-config=kernel \
+	    --with-linux=$(BUILD_DIR)/$(KERNEL_SRC) \
+	    --with-linux-obj=$(BUILD_DIR)/$(KERNEL_SRC) \
+	    $(if $(CROSS_COMPILE),--host=$(patsubst %-,%,$(CROSS_COMPILE)))
+	$(MAKE) -C $(MODULES)/$(ZFSDIR) \
+	  ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE)
 	cp $(MODULES)/$(ZFSDIR)/module/zfs.ko $(MODULES)/
 	cp $(MODULES)/$(ZFSDIR)/module/spl.ko $(MODULES)/
 

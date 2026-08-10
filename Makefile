@@ -79,8 +79,16 @@ deb: $(DEBS)
 	#lintian $(HDR_DEB)
 	lintian $(LINUX_TOOLS_DEB)
 
+# When CROSS_COMPILE is set, build arm64 packages from an amd64 host.
+DPKG_BUILDPACKAGE_ARCH_OPTS =
+ifneq ($(CROSS_COMPILE),)
+DPKG_BUILDPACKAGE_ARCH_OPTS = --host-arch $(ARCH)
+endif
+
 $(META_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(HDR_DEB) $(DST_DEB) &: $(BUILD_DIR).prepared
-	cd $(BUILD_DIR); dpkg-buildpackage --jobs=auto -b -uc -us
+	cd $(BUILD_DIR); \
+	  DEB_HOST_ARCH=$(ARCH) \
+	  dpkg-buildpackage --jobs=auto -b -uc -us $(DPKG_BUILDPACKAGE_ARCH_OPTS)
 
 dsc:
 	$(MAKE) $(DSC)
@@ -114,6 +122,7 @@ debian.prepared: debian
 	echo "KVNAME=$(KVNAME)" >> $(BUILD_DIR)/debian/rules.d/env.mk
 	echo "KERNEL_MAJMIN=$(KERNEL_MAJMIN)" >> $(BUILD_DIR)/debian/rules.d/env.mk
 	echo "CROSS_COMPILE=$(CROSS_COMPILE)" >> $(BUILD_DIR)/debian/rules.d/env.mk
+	echo "SKIPABI=$(SKIPABI)" >> $(BUILD_DIR)/debian/rules.d/env.mk
 	cd $(BUILD_DIR); \
 	  DEB_HOST_ARCH=$(ARCH) DEB_BUILD_ARCH=$(shell dpkg-architecture -qDEB_BUILD_ARCH) \
 	  debian/rules debian/control
@@ -142,13 +151,13 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 $(MODULES).prepared: $(addsuffix .prepared,$(MODULE_DIRS))
 	touch $@
 
-$(ZFSDIR).prepared: $(ZFSONLINUX_SUBMODULE)
-	rm -rf $(BUILD_DIR)/$(MODULES)/$(ZFSDIR) $(BUILD_DIR)/$(MODULES)/tmp $@
-	mkdir -p $(BUILD_DIR)/$(MODULES)/tmp
-	cp -a $(ZFSONLINUX_SUBMODULE)/* $(BUILD_DIR)/$(MODULES)/tmp
-	cd $(BUILD_DIR)/$(MODULES)/tmp; make kernel
-	rm -rf $(BUILD_DIR)/$(MODULES)/tmp
-	touch $(ZFSDIR).prepared
+# Use OpenZFS sources directly (no Proxmox zfs-linux packaging wrapper).
+$(ZFSDIR).prepared: $(ZFSONLINUX_SUBMODULE) | submodule
+	rm -rf $(BUILD_DIR)/$(MODULES)/$(ZFSDIR) $@
+	mkdir -p $(BUILD_DIR)/$(MODULES)
+	cp -a $(ZFSONLINUX_SUBMODULE) $(BUILD_DIR)/$(MODULES)/$(ZFSDIR)
+	rm -rf $(BUILD_DIR)/$(MODULES)/$(ZFSDIR)/.git
+	touch $@
 
 .PHONY: upload
 upload: UPLOAD_DIST ?= $(DEB_DISTRIBUTION)
@@ -169,7 +178,7 @@ update_modules: submodule
 .PHONY: submodule
 submodule:
 	test -f "$(KERNEL_SRC_SUBMODULE)/README" || git submodule update --init $(KERNEL_SRC_SUBMODULE)
-	test -f "$(ZFSONLINUX_SUBMODULE)/Makefile" || git submodule update --init --recursive $(ZFSONLINUX_SUBMODULE)
+	test -f "$(ZFSONLINUX_SUBMODULE)/configure.ac" || git submodule update --init --recursive $(ZFSONLINUX_SUBMODULE)
 
 # call after ABI bump with header deb in working directory
 .PHONY: abiupdate

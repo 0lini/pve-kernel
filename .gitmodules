@@ -1,6 +1,7 @@
 [submodule "submodules/zfsonlinux"]
 	path = submodules/zfsonlinux
-	url = ../zfsonlinux
+	url = https://github.com/openzfs/zfs.git
+	branch = zfs-2.3-release
 [submodule "submodules/asahi-kernel"]
 	path = submodules/asahi-kernel
 	url = https://github.com/UbuntuAsahi/linux.git
