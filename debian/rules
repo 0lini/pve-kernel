@@ -229,6 +229,9 @@ endif
 
 .headers_compile_mark: .headers_prepare_mark
 	# set output to subdir of source to reduce number of hardcoded paths in output files
+	# Ensure out-of-tree O= build: leftovers like arch/*/include/generated make the
+	# kernel Makefile refuse O= builds ("source tree is not clean").
+	$(MAKE) -C $(KERNEL_SRC_COPY) ARCH=$(KERNEL_BUILD_ARCH) mrproper
 	rm -rf $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)
 	mkdir -p $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)
 	cp $(KERNEL_SRC)/.config $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)/.config
