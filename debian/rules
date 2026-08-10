@@ -85,14 +85,14 @@ binary: install
 
 .config_mark:
 	cd $(KERNEL_SRC); scripts/config $(PMX_CONFIG_OPTS)
-	$(KERNEL_CROSS_MAKE) olddefconfig
+	+$(KERNEL_CROSS_MAKE) olddefconfig
 	# copy to allow building in parallel to kernel/module compilation without interference
 	rm -rf $(KERNEL_SRC_COPY)
 	cp -ar $(KERNEL_SRC) $(KERNEL_SRC_COPY)
 	touch $@
 
 .compile_mark: .config_mark
-	$(KERNEL_CROSS_MAKE) KBUILD_BUILD_VERSION_TIMESTAMP="PMX $(DEB_VERSION) ($(CHANGELOG_DATE_UTC_ISO))"
+	+$(KERNEL_CROSS_MAKE) KBUILD_BUILD_VERSION_TIMESTAMP="PMX $(DEB_VERSION) ($(CHANGELOG_DATE_UTC_ISO))"
 	touch $@
 
 .install_mark: .compile_mark .modules_compile_mark
