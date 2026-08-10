@@ -80,7 +80,20 @@ binary: install
 	debian/rules fwcheck abicheck
 	dh_strip -N$(PMX_HEADER_PKG) -N$(PMX_USR_HEADER_PKG) -Xvmlinux -Xvmlinuz
 	dh_makeshlibs
+ifneq ($(CROSS_COMPILE),)
+	# Host has no arm64 multiarch packages; resolve against the cross sysroot
+	# and rewrite *-arm64-cross package names to target runtime packages.
+	dh_shlibdeps -- \
+	  -l/usr/$(patsubst %-,%,$(CROSS_COMPILE))/lib \
+	  --ignore-missing-info
+	sed -i \
+	  -e 's/libgcc-s[0-9]*-arm64-cross/libgcc-s1/g' \
+	  -e 's/libstdc++[0-9]*-arm64-cross/libstdc++6/g' \
+	  -e 's/libc6-arm64-cross/libc6/g' \
+	  debian/*.substvars
+else
 	dh_shlibdeps
+endif
 	dh_installdeb
 	dh_gencontrol
 	dh_md5sums
