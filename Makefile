@@ -87,6 +87,9 @@ DPKG_BUILDPACKAGE_ARCH_OPTS = --host-arch $(ARCH) -d
 endif
 
 $(META_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(HDR_DEB) $(DST_DEB) &: $(BUILD_DIR).prepared
+	# Keep packaging scripts in sync without wiping the compiled kernel tree or env.mk
+	cp debian/rules $(BUILD_DIR)/debian/rules
+	cp debian/rules.d/*.mk debian/rules.d/*.opts $(BUILD_DIR)/debian/rules.d/
 	cd $(BUILD_DIR); \
 	  DEB_HOST_ARCH=$(ARCH) \
 	  PATH="$(PATH)" \

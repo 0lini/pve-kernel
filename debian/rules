@@ -14,6 +14,8 @@ include debian/rules.d/$(DEB_HOST_ARCH).mk
 
 # Optional cross-compile prefix (set via debian/rules.d/env.mk from top-level Makefile)
 CROSS_COMPILE ?=
+# Cross builds must strip aarch64 objects with the cross toolchain's strip
+MODULE_STRIP = $(CROSS_COMPILE)strip
 # Embed -j here because dpkg-buildpackage often does not propagate the jobserver
 KERNEL_CROSS_MAKE = $(MAKE) -C $(KERNEL_SRC) ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -j$(shell nproc)
 
@@ -123,9 +125,9 @@ else
 	rm -f debian/$(PMX_DEBUG_KERNEL_PKG)/usr/lib/debug/usr/lib/modules/$(KVNAME)/modules.*
 endif
 
-	# strip debug info (use cross strip when CROSS_COMPILE is set)
+	# strip debug info (MODULE_STRIP is cross-prefixed when CROSS_COMPILE is set)
 	find debian/$(PMX_KERNEL_PKG)/usr/lib/modules -name \*.ko -print | while read f ; do \
-		$(CROSS_COMPILE)strip --strip-debug "$$f"; \
+		$(MODULE_STRIP) --strip-debug "$$f"; \
 	done
 
 	# sign modules using ephemeral, embedded key
