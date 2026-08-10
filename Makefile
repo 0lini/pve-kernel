@@ -82,12 +82,14 @@ deb: $(DEBS)
 # When CROSS_COMPILE is set, build arm64 packages from an amd64 host.
 DPKG_BUILDPACKAGE_ARCH_OPTS =
 ifneq ($(CROSS_COMPILE),)
-DPKG_BUILDPACKAGE_ARCH_OPTS = --host-arch $(ARCH)
+# -d: ignore Build-Depends arch mismatch on the cross host (toolchain is separate)
+DPKG_BUILDPACKAGE_ARCH_OPTS = --host-arch $(ARCH) -d
 endif
 
 $(META_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(HDR_DEB) $(DST_DEB) &: $(BUILD_DIR).prepared
 	cd $(BUILD_DIR); \
 	  DEB_HOST_ARCH=$(ARCH) \
+	  PATH="$(PATH)" \
 	  dpkg-buildpackage --jobs=auto -b -uc -us $(DPKG_BUILDPACKAGE_ARCH_OPTS)
 
 dsc:
