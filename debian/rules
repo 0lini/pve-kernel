@@ -123,8 +123,10 @@ else
 	rm -f debian/$(PMX_DEBUG_KERNEL_PKG)/usr/lib/debug/usr/lib/modules/$(KVNAME)/modules.*
 endif
 
-	# strip debug info
-	find debian/$(PMX_KERNEL_PKG)/usr/lib/modules -name \*.ko -print | while read f ; do strip --strip-debug "$$f"; done
+	# strip debug info (use cross strip when CROSS_COMPILE is set)
+	find debian/$(PMX_KERNEL_PKG)/usr/lib/modules -name \*.ko -print | while read f ; do \
+		$(CROSS_COMPILE)strip --strip-debug "$$f"; \
+	done
 
 	# sign modules using ephemeral, embedded key
 	if grep -q CONFIG_MODULE_SIG=y $(KERNEL_SRC)/.config ; then \
