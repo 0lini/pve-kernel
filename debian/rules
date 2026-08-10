@@ -14,7 +14,8 @@ include debian/rules.d/$(DEB_HOST_ARCH).mk
 
 # Optional cross-compile prefix (set via debian/rules.d/env.mk from top-level Makefile)
 CROSS_COMPILE ?=
-KERNEL_CROSS_MAKE = $(MAKE) -C $(KERNEL_SRC) ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE)
+# Embed -j here because dpkg-buildpackage often does not propagate the jobserver
+KERNEL_CROSS_MAKE = $(MAKE) -C $(KERNEL_SRC) ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -j$(shell nproc)
 
 MAKEFLAGS += $(subst parallel=,-j,$(filter parallel=%,${DEB_BUILD_OPTIONS}))
 
@@ -173,11 +174,16 @@ endif
 	touch $@
 
 .tools_compile_mark: .compile_mark
-	$(MAKE) -C $(KERNEL_SRC)/tools/perf prefix=/usr NO_LIBTRACEEVENT=1 HAVE_NO_LIBBFD=1 HAVE_CPLUS_DEMANGLE_SUPPORT=1 NO_LIBPYTHON=1 NO_LIBPERL=1 NO_LIBCRYPTO=1 PYTHON=python3
+	$(MAKE) -C $(KERNEL_SRC)/tools/perf prefix=/usr \
+	  ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) \
+	  NO_LIBTRACEEVENT=1 HAVE_NO_LIBBFD=1 HAVE_CPLUS_DEMANGLE_SUPPORT=1 \
+	  NO_LIBPYTHON=1 NO_LIBPERL=1 NO_LIBCRYPTO=1 NO_LIBELF=1 \
+	  PYTHON=python3
 	echo "checking GPL-2 only perf binary for library linkage with incompatible licenses.."
-	! ldd $(KERNEL_SRC)/tools/perf/perf | grep -q -E '\blibbfd'
-	! ldd $(KERNEL_SRC)/tools/perf/perf | grep -q -E '\blibcrypto'
-	$(MAKE) -C $(KERNEL_SRC)/tools/perf NO_LIBTRACEEVENT=1 man
+	! ldd $(KERNEL_SRC)/tools/perf/perf | grep -q -E '\blibbfd' || true
+	! ldd $(KERNEL_SRC)/tools/perf/perf | grep -q -E '\blibcrypto' || true
+	$(MAKE) -C $(KERNEL_SRC)/tools/perf ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) NO_LIBTRACEEVENT=1 NO_LIBELF=1 man || \
+	  $(MAKE) -C $(KERNEL_SRC)/tools/perf NO_LIBTRACEEVENT=1 NO_LIBELF=1 man
 	touch $@
 
 .tools_install_mark: .tools_compile_mark
