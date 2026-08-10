@@ -102,7 +102,7 @@ binary: install
 	install -m 644 $(KERNEL_SRC)/.config debian/$(PMX_KERNEL_PKG)/boot/config-$(KVNAME)
 	install -m 644 $(KERNEL_SRC)/System.map debian/$(PMX_KERNEL_PKG)/boot/System.map-$(KVNAME)
 	install -m 644 $(KERNEL_SRC)/$(KERNEL_IMAGE_PATH) debian/$(PMX_KERNEL_PKG)/boot/$(KERNEL_INSTALL_FILE)-$(KVNAME)
-	$(KERNEL_CROSS_MAKE) INSTALL_MOD_PATH=$(BUILD_DIR)/debian/$(PMX_KERNEL_PKG)/usr/ modules_install
+	+$(KERNEL_CROSS_MAKE) INSTALL_MOD_PATH=$(BUILD_DIR)/debian/$(PMX_KERNEL_PKG)/usr/ modules_install
 	# install zfs drivers
 	install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/zfs
 	install -m 644 $(MODULES)/zfs.ko $(MODULES)/spl.ko debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/zfs
@@ -222,7 +222,7 @@ endif
 	rm -rf $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)
 	mkdir -p $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)
 	cp $(KERNEL_SRC)/.config $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)/.config
-	$(MAKE) -C $(KERNEL_SRC_COPY) O=$(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG) -j1 syncconfig modules_prepare prepare scripts
+	$(MAKE) -C $(KERNEL_SRC_COPY) ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) O=$(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG) -j1 syncconfig modules_prepare prepare scripts
 	cd $(KERNEL_SRC_COPY); cp -a include scripts $(BUILD_DIR)/debian/$(PMX_HEADER_PKG)/usr/src/linux-headers-$(KVNAME)
 	find $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG) -name \*.o.ur-\* -o -name '*.cmd' | xargs rm -f
 	rsync --ignore-existing -r -v -a $(addprefix $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)/,arch include kernel scripts tools) $(BUILD_DIR)/debian/$(PMX_HEADER_PKG)/usr/src/linux-headers-$(KVNAME)/
