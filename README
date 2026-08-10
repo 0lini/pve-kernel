@@ -56,6 +56,26 @@ described below:
  mk-build-deps -ir BUILD-DIR/debian/control
 
 
+Upstream tracking (Renovate)
+----------------------------
+
+This repo is set up for [Renovate](https://docs.renovatebot.com/) to open PRs when
+upstream pins move:
+
+- `submodules/asahi-kernel` — newer `Ubuntu-asahi-arm-*` packaging tags
+- `submodules/zfsonlinux` — tip of `zfs-2.3-release`
+- `.github/upstream-pins.toml` — Proxmox `pve-kernel` `master` digest (notice only;
+  x86/CVE backports still need a human to port)
+
+Enable it once for the GitHub repo:
+
+1. Install the [Renovate GitHub App](https://github.com/apps/renovate) on `0lini/pve-kernel`
+2. Merge this config (`renovate.json`)
+3. Renovate will open a Dependency Dashboard issue/PR and follow-up update PRs
+
+Renovate does **not** build `.deb` packages; it only tracks version drift.
+
+
 Package Build
 -------------
 
