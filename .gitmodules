@@ -5,4 +5,6 @@
 [submodule "submodules/asahi-kernel"]
 	path = submodules/asahi-kernel
 	url = https://github.com/UbuntuAsahi/linux.git
-	branch = asahi-arm-7.0
+	# Pin a packaging tag (not a moving branch) so Renovate can propose newer
+	# Ubuntu-asahi-arm-* tags. Keep the recorded submodule commit in sync.
+	branch = Ubuntu-asahi-arm-7.0.0-1002.2

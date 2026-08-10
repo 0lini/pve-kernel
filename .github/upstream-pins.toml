@@ -1,0 +1,7 @@
+# Upstream pins for Renovate (git-refs custom manager).
+# Renovate updates the digest when the named ref moves.
+# This does NOT auto-merge Proxmox packaging into the Asahi fork — it only
+# opens a PR bumping the pin so humans notice and can port relevant changes.
+
+proxmox_pve_kernel_digest = "6daa7f036b6593cd47f81d3adc07bf3a207ad842"
+proxmox_pve_kernel_ref = "master"

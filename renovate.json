@@ -1,0 +1,53 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommitsDisabled"
+  ],
+  "labels": ["dependencies", "upstream"],
+  "prHourlyLimit": 2,
+  "prConcurrentLimit": 3,
+  "commitMessagePrefix": "chore(deps):",
+  "git-submodules": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Ubuntu Asahi packaging tags (Ubuntu-asahi-arm-X.Y.Z-A.B)",
+      "matchManagers": ["git-submodules"],
+      "matchDepNames": ["submodules/asahi-kernel"],
+      "versioning": "regex:^(?<compatibility>Ubuntu-asahi-arm-)(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-(?<build>\\d+)\\.(?<revision>\\d+)$",
+      "groupName": "ubuntu asahi kernel"
+    },
+    {
+      "description": "OpenZFS release branch tip",
+      "matchManagers": ["git-submodules"],
+      "matchDepNames": ["submodules/zfsonlinux"],
+      "groupName": "openzfs"
+    },
+    {
+      "description": "Proxmox packaging tip (informational pin; review patches manually)",
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["proxmox/pve-kernel"],
+      "groupName": "proxmox pve-kernel",
+      "commitMessageTopic": "proxmox/pve-kernel",
+      "prBodyNotes": [
+        "Proxmox updates often include **x86-only** patches. Review `debian/changelog` and `patches/` on upstream before porting anything into this Asahi/arm64 fork."
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track Proxmox pve-kernel master HEAD via pin file",
+      "managerFilePatterns": ["/^\\.github\\/upstream-pins\\.toml$/"],
+      "matchStrings": [
+        "proxmox_pve_kernel_digest\\s*=\\s*\"(?<currentDigest>[a-f0-9]+)\"\\s*\\n\\s*proxmox_pve_kernel_ref\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "depNameTemplate": "proxmox/pve-kernel",
+      "packageNameTemplate": "https://git.proxmox.com/git/pve-kernel.git",
+      "datasourceTemplate": "git-refs"
+    }
+  ]
+}
