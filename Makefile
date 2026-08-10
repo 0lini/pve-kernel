@@ -69,7 +69,8 @@ HDR_DEB=$(HDRPACKAGE)_$(DEB_VERSION)_$(ARCH).deb
 META_HDR_DEB=proxmox-headers-$(KERNEL_MAJMIN)_$(DEB_VERSION)_$(ARCH).deb
 USR_HDR_DEB=proxmox-kernel-libc-dev_$(DEB_VERSION)_$(ARCH).deb
 LINUX_TOOLS_DEB=linux-tools-$(KERNEL_MAJMIN)_$(DEB_VERSION)_$(ARCH).deb
-LINUX_TOOLS_DBG_DEB=linux-tools-$(KERNEL_MAJMIN)-dbgsym_$(DEB_VERSION)_$(ARCH).deb
+# debhelper emits dbgsym as .ddeb on modern Debian/Ubuntu
+LINUX_TOOLS_DBG_DEB=linux-tools-$(KERNEL_MAJMIN)-dbgsym_$(DEB_VERSION)_$(ARCH).ddeb
 
 DEBS=$(DST_DEB) $(META_DEB) $(HDR_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(LINUX_TOOLS_DBG_DEB) $(SIGNED_TEMPLATE_DEB) # $(USR_HDR_DEB)
 
@@ -86,7 +87,7 @@ ifneq ($(CROSS_COMPILE),)
 DPKG_BUILDPACKAGE_ARCH_OPTS = --host-arch $(ARCH) -d
 endif
 
-$(META_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(HDR_DEB) $(DST_DEB) &: $(BUILD_DIR).prepared
+$(META_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(LINUX_TOOLS_DBG_DEB) $(HDR_DEB) $(DST_DEB) $(SIGNED_TEMPLATE_DEB) $(USR_HDR_DEB) &: $(BUILD_DIR).prepared
 	# Keep packaging scripts in sync without wiping the compiled kernel tree or env.mk
 	cp debian/rules $(BUILD_DIR)/debian/rules
 	cp debian/rules.d/*.mk debian/rules.d/*.opts $(BUILD_DIR)/debian/rules.d/
