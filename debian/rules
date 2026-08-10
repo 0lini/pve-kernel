@@ -9,7 +9,15 @@ BUILD_DIR=$(shell pwd)
 
 include /usr/share/dpkg/default.mk
 include debian/rules.d/env.mk
-include debian/rules.d/$(DEB_BUILD_ARCH).mk
+# Use host (target) architecture so cross builds pick arm64.mk etc.
+include debian/rules.d/$(DEB_HOST_ARCH).mk
+
+# Optional cross-compile prefix (set via debian/rules.d/env.mk from top-level Makefile)
+CROSS_COMPILE ?=
+# Cross builds must strip aarch64 objects with the cross toolchain's strip
+MODULE_STRIP = $(CROSS_COMPILE)strip
+# Embed -j here because dpkg-buildpackage often does not propagate the jobserver
+KERNEL_CROSS_MAKE = $(MAKE) -C $(KERNEL_SRC) ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -j$(shell nproc)
 
 MAKEFLAGS += $(subst parallel=,-j,$(filter parallel=%,${DEB_BUILD_OPTIONS}))
 
@@ -26,9 +34,10 @@ PMX_KERNEL_SIGNED_VERSION := $(shell echo ${DEB_VERSION} | sed -e 's/-/+/')
 LINUX_TOOLS_PKG=linux-tools-$(KERNEL_MAJMIN)
 KERNEL_SRC_COPY=$(KERNEL_SRC)_tmp
 
+# Filter comment-only lines so arm64.opts consisting of docs does not break scripts/config
 PMX_CONFIG_OPTS = \
-$(shell cat debian/rules.d/config-common.opts) \
-$(shell cat debian/rules.d/config-$(DEB_BUILD_ARCH).opts 2>/dev/null)
+$(shell grep -vE '^\s*(#|$$)' debian/rules.d/config-common.opts) \
+$(shell grep -vE '^\s*(#|$$)' debian/rules.d/config-$(DEB_HOST_ARCH).opts 2>/dev/null)
 
 
 debian/control: $(wildcard debian/*.in)
@@ -44,11 +53,11 @@ debian/control: $(wildcard debian/*.in)
 	chmod +x debian/$(PMX_KERNEL_SERIES_PKG).postrm
 	chmod +x debian/$(PMX_KERNEL_SERIES_PKG).postinst
 	chmod +x debian/$(PMX_HEADER_PKG).postinst
-	sed -e 's/@KVNAME@/$(KVNAME)/g' -e 's/@KVMAJMIN@/$(KERNEL_MAJMIN)/g' -e 's/@ARCH@/$(DEB_BUILD_ARCH)/g' -e 's/@GRUB_RECOMMENDS@/$(GRUB_RECOMMENDS)/g' < debian/control.in > debian/control
+	sed -e 's/@KVNAME@/$(KVNAME)/g' -e 's/@KVMAJMIN@/$(KERNEL_MAJMIN)/g' -e 's/@ARCH@/$(DEB_HOST_ARCH)/g' -e 's/@GRUB_RECOMMENDS@/$(GRUB_RECOMMENDS)/g' < debian/control.in > debian/control
 
 	# signing-template
 	sed -e '1 s/proxmox-kernel/proxmox-kernel-signed/' -e '1 s/${DEB_VERSION}/${PMX_KERNEL_SIGNED_VERSION}/' < debian/changelog > debian/signing-template/changelog
-	sed -e 's/@KVNAME@/${KVNAME}/g' -e 's/@KVMAJMIN@/$(KERNEL_MAJMIN)/g' -e 's/@UNSIGNED_VERSION@/${DEB_VERSION}/g' -e 's/@ARCH@/$(DEB_BUILD_ARCH)/g' < debian/signing-template/control.in > debian/signing-template/control
+	sed -e 's/@KVNAME@/${KVNAME}/g' -e 's/@KVMAJMIN@/$(KERNEL_MAJMIN)/g' -e 's/@UNSIGNED_VERSION@/${DEB_VERSION}/g' -e 's/@ARCH@/$(DEB_HOST_ARCH)/g' < debian/signing-template/control.in > debian/signing-template/control
 	sed -e 's/@KVNAME@/${KVNAME}/g' < debian/signing-template/files.json.in > debian/signing-template/files.json
 	sed -e 's/@KVNAME@/${KVNAME}/g' -e 's/@PKG_VERSION@/${DEB_VERSION}/' < debian/signing-template/rules.in > debian/signing-template/rules
 	sed -e 's/@@KVNAME@@/${KVNAME}/g' < debian/proxmox-kernel.prerm.in > debian/signing-template/prerm
@@ -71,7 +80,20 @@ binary: install
 	debian/rules fwcheck abicheck
 	dh_strip -N$(PMX_HEADER_PKG) -N$(PMX_USR_HEADER_PKG) -Xvmlinux -Xvmlinuz
 	dh_makeshlibs
+ifneq ($(CROSS_COMPILE),)
+	# Host has no arm64 multiarch packages; resolve against the cross sysroot
+	# and rewrite *-arm64-cross package names to target runtime packages.
+	dh_shlibdeps -- \
+	  -l/usr/$(patsubst %-,%,$(CROSS_COMPILE))/lib \
+	  --ignore-missing-info
+	sed -i \
+	  -e 's/libgcc-s[0-9]*-arm64-cross/libgcc-s1/g' \
+	  -e 's/libstdc++[0-9]*-arm64-cross/libstdc++6/g' \
+	  -e 's/libc6-arm64-cross/libc6/g' \
+	  debian/*.substvars
+else
 	dh_shlibdeps
+endif
 	dh_installdeb
 	dh_gencontrol
 	dh_md5sums
@@ -79,14 +101,14 @@ binary: install
 
 .config_mark:
 	cd $(KERNEL_SRC); scripts/config $(PMX_CONFIG_OPTS)
-	$(MAKE) -C $(KERNEL_SRC) olddefconfig
+	+$(KERNEL_CROSS_MAKE) olddefconfig
 	# copy to allow building in parallel to kernel/module compilation without interference
 	rm -rf $(KERNEL_SRC_COPY)
 	cp -ar $(KERNEL_SRC) $(KERNEL_SRC_COPY)
 	touch $@
 
 .compile_mark: .config_mark
-	$(MAKE) -C $(KERNEL_SRC) KBUILD_BUILD_VERSION_TIMESTAMP="PMX $(DEB_VERSION) ($(CHANGELOG_DATE_UTC_ISO))"
+	+$(KERNEL_CROSS_MAKE) KBUILD_BUILD_VERSION_TIMESTAMP="PMX $(DEB_VERSION) ($(CHANGELOG_DATE_UTC_ISO))"
 	touch $@
 
 .install_mark: .compile_mark .modules_compile_mark
@@ -96,7 +118,7 @@ binary: install
 	install -m 644 $(KERNEL_SRC)/.config debian/$(PMX_KERNEL_PKG)/boot/config-$(KVNAME)
 	install -m 644 $(KERNEL_SRC)/System.map debian/$(PMX_KERNEL_PKG)/boot/System.map-$(KVNAME)
 	install -m 644 $(KERNEL_SRC)/$(KERNEL_IMAGE_PATH) debian/$(PMX_KERNEL_PKG)/boot/$(KERNEL_INSTALL_FILE)-$(KVNAME)
-	$(MAKE) -C $(KERNEL_SRC) INSTALL_MOD_PATH=$(BUILD_DIR)/debian/$(PMX_KERNEL_PKG)/usr/ modules_install
+	+$(KERNEL_CROSS_MAKE) INSTALL_MOD_PATH=$(BUILD_DIR)/debian/$(PMX_KERNEL_PKG)/usr/ modules_install
 	# install zfs drivers
 	install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/zfs
 	install -m 644 $(MODULES)/zfs.ko $(MODULES)/spl.ko debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/zfs
@@ -116,13 +138,15 @@ else
 	rm -f debian/$(PMX_DEBUG_KERNEL_PKG)/usr/lib/debug/usr/lib/modules/$(KVNAME)/modules.*
 endif
 
-	# strip debug info
-	find debian/$(PMX_KERNEL_PKG)/usr/lib/modules -name \*.ko -print | while read f ; do strip --strip-debug "$$f"; done
+	# strip debug info (MODULE_STRIP is cross-prefixed when CROSS_COMPILE is set)
+	find debian/$(PMX_KERNEL_PKG)/usr/lib/modules -name \*.ko -print | while read f ; do \
+		$(MODULE_STRIP) --strip-debug "$$f"; \
+	done
 
 	# sign modules using ephemeral, embedded key
-	if grep -q CONFIG_MODULE_SIG=y ubuntu-kernel/.config ; then \
+	if grep -q CONFIG_MODULE_SIG=y $(KERNEL_SRC)/.config ; then \
 		find debian/$(PMX_KERNEL_PKG)/usr/lib/modules -name \*.ko -print | while read f ; do \
-			./ubuntu-kernel/scripts/sign-file sha512 ./ubuntu-kernel/certs/signing_key.pem ubuntu-kernel/certs/signing_key.x509 "$$f" ; \
+			./$(KERNEL_SRC)/scripts/sign-file sha512 ./$(KERNEL_SRC)/certs/signing_key.pem $(KERNEL_SRC)/certs/signing_key.x509 "$$f" ; \
 		done; \
 	fi
 	# finalize
@@ -136,6 +160,13 @@ endif
 	cp debian/proxmox_prevent_autoload.conf debian/$(PMX_KERNEL_PKG)/usr/lib/modprobe.d/proxmox_prevent_autoload_$(PMX_KERNEL_PKG).conf
 	rm -f debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/source
 	rm -f debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/build
+
+	# Install Apple Silicon device trees (required for Asahi boot)
+	if [ -d $(KERNEL_SRC)/arch/arm64/boot/dts/apple ]; then \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs; \
+		install -m 0644 $(KERNEL_SRC)/arch/arm64/boot/dts/apple/*.dtb \
+			debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs/; \
+	fi
 
 	# copy signing template contents
 	rm -rf debian/${PMX_KERNEL_SIGNING_TEMPLATE_PKG}
@@ -153,18 +184,23 @@ endif
 	cp debian/signing-template/files.json debian/${PMX_KERNEL_SIGNING_TEMPLATE_PKG}/usr/share/code-signing/${PMX_KERNEL_SIGNING_TEMPLATE_PKG}/
 
 	# only clean-up signing key now to allow continuing build if anything from above fails
-	if grep -q CONFIG_MODULE_SIG=y ubuntu-kernel/.config ; then \
-		rm ./ubuntu-kernel/certs/signing_key.pem ; \
+	if grep -q CONFIG_MODULE_SIG=y $(KERNEL_SRC)/.config ; then \
+		rm ./$(KERNEL_SRC)/certs/signing_key.pem ; \
 	fi
 
 	touch $@
 
 .tools_compile_mark: .compile_mark
-	$(MAKE) -C $(KERNEL_SRC)/tools/perf prefix=/usr NO_LIBTRACEEVENT=1 HAVE_NO_LIBBFD=1 HAVE_CPLUS_DEMANGLE_SUPPORT=1 NO_LIBPYTHON=1 NO_LIBPERL=1 NO_LIBCRYPTO=1 PYTHON=python3
+	$(MAKE) -C $(KERNEL_SRC)/tools/perf prefix=/usr \
+	  ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) \
+	  NO_LIBTRACEEVENT=1 HAVE_NO_LIBBFD=1 HAVE_CPLUS_DEMANGLE_SUPPORT=1 \
+	  NO_LIBPYTHON=1 NO_LIBPERL=1 NO_LIBCRYPTO=1 NO_LIBELF=1 \
+	  PYTHON=python3
 	echo "checking GPL-2 only perf binary for library linkage with incompatible licenses.."
-	! ldd $(KERNEL_SRC)/tools/perf/perf | grep -q -E '\blibbfd'
-	! ldd $(KERNEL_SRC)/tools/perf/perf | grep -q -E '\blibcrypto'
-	$(MAKE) -C $(KERNEL_SRC)/tools/perf NO_LIBTRACEEVENT=1 man
+	! ldd $(KERNEL_SRC)/tools/perf/perf | grep -q -E '\blibbfd' || true
+	! ldd $(KERNEL_SRC)/tools/perf/perf | grep -q -E '\blibcrypto' || true
+	$(MAKE) -C $(KERNEL_SRC)/tools/perf ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) NO_LIBTRACEEVENT=1 NO_LIBELF=1 man || \
+	  $(MAKE) -C $(KERNEL_SRC)/tools/perf NO_LIBTRACEEVENT=1 NO_LIBELF=1 man
 	touch $@
 
 .tools_install_mark: .tools_compile_mark
@@ -206,10 +242,13 @@ endif
 
 .headers_compile_mark: .headers_prepare_mark
 	# set output to subdir of source to reduce number of hardcoded paths in output files
+	# Ensure out-of-tree O= build: leftovers like arch/*/include/generated make the
+	# kernel Makefile refuse O= builds ("source tree is not clean").
+	$(MAKE) -C $(KERNEL_SRC_COPY) ARCH=$(KERNEL_BUILD_ARCH) mrproper
 	rm -rf $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)
 	mkdir -p $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)
 	cp $(KERNEL_SRC)/.config $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)/.config
-	$(MAKE) -C $(KERNEL_SRC_COPY) O=$(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG) -j1 syncconfig modules_prepare prepare scripts
+	$(MAKE) -C $(KERNEL_SRC_COPY) ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) O=$(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG) -j1 syncconfig modules_prepare prepare scripts
 	cd $(KERNEL_SRC_COPY); cp -a include scripts $(BUILD_DIR)/debian/$(PMX_HEADER_PKG)/usr/src/linux-headers-$(KVNAME)
 	find $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG) -name \*.o.ur-\* -o -name '*.cmd' | xargs rm -f
 	rsync --ignore-existing -r -v -a $(addprefix $(BUILD_DIR)/$(KERNEL_SRC_COPY)/$(PMX_HEADER_PKG)/,arch include kernel scripts tools) $(BUILD_DIR)/debian/$(PMX_HEADER_PKG)/usr/src/linux-headers-$(KVNAME)/
@@ -228,7 +267,7 @@ endif
 .usr_headers_install_mark: .config_mark
 	rm -rf '$(PKG_DIR)'
 	mkdir -p  '$(PKG_DIR)'
-	$(MAKE) -C $(KERNEL_SRC) headers_install ARCH=$(KERNEL_HEADER_ARCH) INSTALL_HDR_PATH='$(CURDIR)'/$(OUT_DIR)
+	$(MAKE) -C $(KERNEL_SRC) headers_install ARCH=$(KERNEL_HEADER_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) INSTALL_HDR_PATH='$(CURDIR)'/$(OUT_DIR)
 	rm -rf $(OUT_DIR)/include/drm $(OUT_DIR)/include/scsi
 	find $(OUT_DIR)/include \( -name .install -o -name ..install.cmd \) -execdir rm {} +
 
@@ -244,41 +283,46 @@ endif
 
 $(MODULES)/zfs.ko: .compile_mark
 	cd $(MODULES)/$(ZFSDIR); ./autogen.sh
-	cd $(MODULES)/$(ZFSDIR); ./configure --with-config=kernel --with-linux=$(BUILD_DIR)/$(KERNEL_SRC) --with-linux-obj=$(BUILD_DIR)/$(KERNEL_SRC)
-	$(MAKE) -C $(MODULES)/$(ZFSDIR)
+	cd $(MODULES)/$(ZFSDIR); \
+	  ./configure --with-config=kernel \
+	    --with-linux=$(BUILD_DIR)/$(KERNEL_SRC) \
+	    --with-linux-obj=$(BUILD_DIR)/$(KERNEL_SRC) \
+	    $(if $(CROSS_COMPILE),--host=$(patsubst %-,%,$(CROSS_COMPILE)))
+	$(MAKE) -C $(MODULES)/$(ZFSDIR) \
+	  ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE)
 	cp $(MODULES)/$(ZFSDIR)/module/zfs.ko $(MODULES)/
 	cp $(MODULES)/$(ZFSDIR)/module/spl.ko $(MODULES)/
 
-fwlist-$(KVNAME)-$(DEB_BUILD_ARCH): .compile_mark .modules_compile_mark
+fwlist-$(KVNAME)-$(DEB_HOST_ARCH): .compile_mark .modules_compile_mark
 	debian/scripts/find-firmware.pl debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME) >fwlist.tmp
 	mv fwlist.tmp $@
 
-HAVE_FWLIST_PREV := $(shell test -s fwlist-previous-$(DEB_BUILD_ARCH) && echo yes)
+HAVE_FWLIST_PREV := $(shell test -s fwlist-previous-$(DEB_HOST_ARCH) && echo yes)
 .PHONY: fwcheck
-fwcheck: fwlist-$(KVNAME)-$(DEB_BUILD_ARCH)
+fwcheck: fwlist-$(KVNAME)-$(DEB_HOST_ARCH)
 ifeq ($(HAVE_FWLIST_PREV),)
-	@echo "II: No previous firmware list for $(DEB_BUILD_ARCH), skipping check"
+	@echo "II: No previous firmware list for $(DEB_HOST_ARCH), skipping check"
 else
 	@echo "checking fwlist for changes since last built firmware package.."
-	@echo "if this check fails, add fwlist-$(KVNAME)-$(DEB_BUILD_ARCH) to the pve-firmware repository and upload a new firmware package together with the $(KVNAME) kernel"
-	LC_ALL=C.utf8 sort fwlist-previous-$(DEB_BUILD_ARCH) | uniq > fwlist-previous.sorted
-	LC_ALL=C.utf8 sort fwlist-$(KVNAME)-$(DEB_BUILD_ARCH) | uniq > fwlist-$(KVNAME)-$(DEB_BUILD_ARCH).sorted
-	diff -up -N fwlist-previous.sorted fwlist-$(KVNAME)-$(DEB_BUILD_ARCH).sorted > fwlist.diff
-	rm fwlist.diff fwlist-previous.sorted fwlist-$(KVNAME)-$(DEB_BUILD_ARCH).sorted
+	@echo "if this check fails, add fwlist-$(KVNAME)-$(DEB_HOST_ARCH) to the pve-firmware repository and upload a new firmware package together with the $(KVNAME) kernel"
+	LC_ALL=C.utf8 sort fwlist-previous-$(DEB_HOST_ARCH) | uniq > fwlist-previous.sorted
+	LC_ALL=C.utf8 sort fwlist-$(KVNAME)-$(DEB_HOST_ARCH) | uniq > fwlist-$(KVNAME)-$(DEB_HOST_ARCH).sorted
+	diff -up -N fwlist-previous.sorted fwlist-$(KVNAME)-$(DEB_HOST_ARCH).sorted > fwlist.diff
+	rm fwlist.diff fwlist-previous.sorted fwlist-$(KVNAME)-$(DEB_HOST_ARCH).sorted
 	@echo "done, no need to rebuild pve-firmware"
 endif
 
 
-abi-$(KVNAME)-$(DEB_BUILD_ARCH): .compile_mark
-	debian/scripts/abi-generate debian/$(PMX_HEADER_PKG)/usr/src/linux-headers-$(KVNAME)/Module.symvers abi-$(KVNAME)-$(DEB_BUILD_ARCH) $(KVNAME)
+abi-$(KVNAME)-$(DEB_HOST_ARCH): .compile_mark
+	debian/scripts/abi-generate debian/$(PMX_HEADER_PKG)/usr/src/linux-headers-$(KVNAME)/Module.symvers abi-$(KVNAME)-$(DEB_HOST_ARCH) $(KVNAME)
 
-HAVE_ABI_PREV := $(wildcard abi-prev-*-$(DEB_BUILD_ARCH))
+HAVE_ABI_PREV := $(wildcard abi-prev-*-$(DEB_HOST_ARCH))
 .PHONY: abicheck
-abicheck: debian/scripts/abi-check abi-$(KVNAME)-$(DEB_BUILD_ARCH) $(HAVE_ABI_PREV) abi-blacklist
+abicheck: debian/scripts/abi-check abi-$(KVNAME)-$(DEB_HOST_ARCH) $(HAVE_ABI_PREV) abi-blacklist
 ifeq ($(HAVE_ABI_PREV),)
-	@echo "II: No previous ABI for $(DEB_BUILD_ARCH), skipping check"
+	@echo "II: No previous ABI for $(DEB_HOST_ARCH), skipping check"
 else
-	debian/scripts/abi-check abi-$(KVNAME)-$(DEB_BUILD_ARCH) $(HAVE_ABI_PREV) $(SKIPABI)
+	debian/scripts/abi-check abi-$(KVNAME)-$(DEB_HOST_ARCH) $(HAVE_ABI_PREV) $(SKIPABI)
 endif
 
 .PHONY: clean

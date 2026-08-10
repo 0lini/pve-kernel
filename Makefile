@@ -3,10 +3,10 @@ include /usr/share/dpkg/pkg-info.mk
 # also bump proxmox-kernel-meta if the default MAJ.MIN version changes!
 KERNEL_MAJ=7
 KERNEL_MIN=0
-KERNEL_PATCHLEVEL=14
+KERNEL_PATCHLEVEL=12
 # increment KREL for every published package release!
 # rebuild packages with new KREL and run 'make abiupdate'
-KREL=10
+KREL=1
 
 # Use to create a separate package for the same version, like -bpoXY for backport or test-$foo.
 # This way the package can be co-installed with the original, a requirement for major dist updates.
@@ -24,23 +24,31 @@ KVNAME=$(KERNEL_VER)$(EXTRAVERSION)
 PACKAGE=proxmox-kernel-$(KVNAME)
 HDRPACKAGE=proxmox-headers-$(KVNAME)
 
-ARCH=$(shell dpkg-architecture -qDEB_HOST_ARCH)
+# Target architecture. Override for cross builds, e.g.:
+#   make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- deb
+ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 
-SUPPORTED_ARCHS = amd64 arm64
+# Ubuntu Asahi / Asahi Linux targets Apple silicon (arm64)
+SUPPORTED_ARCHS = arm64
 ifeq ($(filter $(ARCH),$(SUPPORTED_ARCHS)),)
 $(error Unsupported architecture: $(ARCH). Supported: $(SUPPORTED_ARCHS))
 endif
 
+# Cross-compile prefix (empty for native builds)
+CROSS_COMPILE ?=
+
 # map Debian arch to kernel source arch directory name
-KERNEL_ARCH_amd64 = x86
 KERNEL_ARCH_arm64 = arm64
 KERNEL_ARCH = $(KERNEL_ARCH_$(ARCH))
+
+# Ubuntu Asahi flavour used for annotations export
+KERNEL_FLAVOUR=asahi-arm
 
 SKIPABI=0
 
 BUILD_DIR=proxmox-kernel-$(KERNEL_VER)
 
-KERNEL_SRC=ubuntu-kernel
+KERNEL_SRC=asahi-kernel
 KERNEL_SRC_SUBMODULE=submodules/$(KERNEL_SRC)
 KERNEL_CFG_ORG=config-$(KERNEL_VER)-$(ARCH).org
 
@@ -61,7 +69,8 @@ HDR_DEB=$(HDRPACKAGE)_$(DEB_VERSION)_$(ARCH).deb
 META_HDR_DEB=proxmox-headers-$(KERNEL_MAJMIN)_$(DEB_VERSION)_$(ARCH).deb
 USR_HDR_DEB=proxmox-kernel-libc-dev_$(DEB_VERSION)_$(ARCH).deb
 LINUX_TOOLS_DEB=linux-tools-$(KERNEL_MAJMIN)_$(DEB_VERSION)_$(ARCH).deb
-LINUX_TOOLS_DBG_DEB=linux-tools-$(KERNEL_MAJMIN)-dbgsym_$(DEB_VERSION)_$(ARCH).deb
+# debhelper emits dbgsym as .ddeb on modern Debian/Ubuntu
+LINUX_TOOLS_DBG_DEB=linux-tools-$(KERNEL_MAJMIN)-dbgsym_$(DEB_VERSION)_$(ARCH).ddeb
 
 DEBS=$(DST_DEB) $(META_DEB) $(HDR_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(LINUX_TOOLS_DBG_DEB) $(SIGNED_TEMPLATE_DEB) # $(USR_HDR_DEB)
 
@@ -71,8 +80,21 @@ deb: $(DEBS)
 	#lintian $(HDR_DEB)
 	lintian $(LINUX_TOOLS_DEB)
 
-$(META_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(HDR_DEB) $(DST_DEB) &: $(BUILD_DIR).prepared
-	cd $(BUILD_DIR); dpkg-buildpackage --jobs=auto -b -uc -us
+# When CROSS_COMPILE is set, build arm64 packages from an amd64 host.
+DPKG_BUILDPACKAGE_ARCH_OPTS =
+ifneq ($(CROSS_COMPILE),)
+# -d: ignore Build-Depends arch mismatch on the cross host (toolchain is separate)
+DPKG_BUILDPACKAGE_ARCH_OPTS = --host-arch $(ARCH) -d
+endif
+
+$(META_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(LINUX_TOOLS_DBG_DEB) $(HDR_DEB) $(DST_DEB) $(SIGNED_TEMPLATE_DEB) $(USR_HDR_DEB) &: $(BUILD_DIR).prepared
+	# Keep packaging scripts in sync without wiping the compiled kernel tree or env.mk
+	cp debian/rules $(BUILD_DIR)/debian/rules
+	cp debian/rules.d/*.mk debian/rules.d/*.opts $(BUILD_DIR)/debian/rules.d/
+	cd $(BUILD_DIR); \
+	  DEB_HOST_ARCH=$(ARCH) \
+	  PATH="$(PATH)" \
+	  dpkg-buildpackage --jobs=auto -b -uc -us $(DPKG_BUILDPACKAGE_ARCH_OPTS)
 
 dsc:
 	$(MAKE) $(DSC)
@@ -105,7 +127,11 @@ debian.prepared: debian
 	@$(foreach dir, $(DIRS),echo "$(dir)=$($(dir))" >> $(BUILD_DIR)/debian/rules.d/env.mk;)
 	echo "KVNAME=$(KVNAME)" >> $(BUILD_DIR)/debian/rules.d/env.mk
 	echo "KERNEL_MAJMIN=$(KERNEL_MAJMIN)" >> $(BUILD_DIR)/debian/rules.d/env.mk
-	cd $(BUILD_DIR); debian/rules debian/control
+	echo "CROSS_COMPILE=$(CROSS_COMPILE)" >> $(BUILD_DIR)/debian/rules.d/env.mk
+	echo "SKIPABI=$(SKIPABI)" >> $(BUILD_DIR)/debian/rules.d/env.mk
+	cd $(BUILD_DIR); \
+	  DEB_HOST_ARCH=$(ARCH) DEB_BUILD_ARCH=$(shell dpkg-architecture -qDEB_BUILD_ARCH) \
+	  debian/rules debian/control
 	touch $@
 
 $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
@@ -113,10 +139,14 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 	mkdir -p $(BUILD_DIR)
 	cp -a $(KERNEL_SRC_SUBMODULE) $(BUILD_DIR)/$(KERNEL_SRC)
 	cd $(BUILD_DIR)/$(KERNEL_SRC); git clean -xdfi
-	cd $(BUILD_DIR)/$(KERNEL_SRC); python3 debian/scripts/misc/annotations --arch $(ARCH) --export >../../$(KERNEL_CFG_ORG)
+	# Export Ubuntu Asahi annotations (debian.asahi-arm) as the base .config
+	cd $(BUILD_DIR)/$(KERNEL_SRC); python3 debian/scripts/misc/annotations \
+	    --arch $(ARCH) --flavour $(KERNEL_FLAVOUR) --export >../../$(KERNEL_CFG_ORG)
 	cp $(KERNEL_CFG_ORG) $(BUILD_DIR)/$(KERNEL_SRC)/.config
 	sed -i $(BUILD_DIR)/$(KERNEL_SRC)/Makefile -e 's/^EXTRAVERSION.*$$/EXTRAVERSION=$(EXTRAVERSION)/'
-	rm -rf $(BUILD_DIR)/$(KERNEL_SRC)/debian $(BUILD_DIR)/$(KERNEL_SRC)/debian.master
+	rm -rf $(BUILD_DIR)/$(KERNEL_SRC)/debian \
+	       $(BUILD_DIR)/$(KERNEL_SRC)/debian.master \
+	       $(BUILD_DIR)/$(KERNEL_SRC)/debian.asahi-arm
 	set -e; cd $(BUILD_DIR)/$(KERNEL_SRC); \
 	  for patch in ../../patches/kernel/*.patch; do \
 	    echo "applying patch '$$patch'"; \
@@ -127,13 +157,13 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 $(MODULES).prepared: $(addsuffix .prepared,$(MODULE_DIRS))
 	touch $@
 
-$(ZFSDIR).prepared: $(ZFSONLINUX_SUBMODULE)
-	rm -rf $(BUILD_DIR)/$(MODULES)/$(ZFSDIR) $(BUILD_DIR)/$(MODULES)/tmp $@
-	mkdir -p $(BUILD_DIR)/$(MODULES)/tmp
-	cp -a $(ZFSONLINUX_SUBMODULE)/* $(BUILD_DIR)/$(MODULES)/tmp
-	cd $(BUILD_DIR)/$(MODULES)/tmp; make kernel
-	rm -rf $(BUILD_DIR)/$(MODULES)/tmp
-	touch $(ZFSDIR).prepared
+# Use OpenZFS sources directly (no Proxmox zfs-linux packaging wrapper).
+$(ZFSDIR).prepared: $(ZFSONLINUX_SUBMODULE) | submodule
+	rm -rf $(BUILD_DIR)/$(MODULES)/$(ZFSDIR) $@
+	mkdir -p $(BUILD_DIR)/$(MODULES)
+	cp -a $(ZFSONLINUX_SUBMODULE) $(BUILD_DIR)/$(MODULES)/$(ZFSDIR)
+	rm -rf $(BUILD_DIR)/$(MODULES)/$(ZFSDIR)/.git
+	touch $@
 
 .PHONY: upload
 upload: UPLOAD_DIST ?= $(DEB_DISTRIBUTION)
@@ -154,7 +184,7 @@ update_modules: submodule
 .PHONY: submodule
 submodule:
 	test -f "$(KERNEL_SRC_SUBMODULE)/README" || git submodule update --init $(KERNEL_SRC_SUBMODULE)
-	test -f "$(ZFSONLINUX_SUBMODULE)/Makefile" || git submodule update --init --recursive $(ZFSONLINUX_SUBMODULE)
+	test -f "$(ZFSONLINUX_SUBMODULE)/configure.ac" || git submodule update --init --recursive $(ZFSONLINUX_SUBMODULE)
 
 # call after ABI bump with header deb in working directory
 .PHONY: abiupdate

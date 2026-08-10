@@ -1,3 +1,16 @@
+proxmox-kernel-7.0 (7.0.12-1) trixie; urgency=medium
+
+  * Switch kernel submodule from Ubuntu generic to Ubuntu Asahi
+    (https://github.com/UbuntuAsahi/linux), tag Ubuntu-asahi-arm-7.0.0-1002.2
+    based on Asahi Linux for Apple silicon.
+  * Limit supported architecture to arm64 (asahi-arm flavour).
+  * Export base config from debian.asahi-arm annotations.
+  * Install Apple device trees into the kernel module directory.
+  * Drop x86/Ubuntu-SAUCE-only patches that do not apply on asahi-arm.
+  * Bump package version to 7.0.12-1 for the new Asahi-based ABI.
+
+ -- Oliver Elsner <oliver.elsner@lvndl.de>  Thu, 06 Aug 2026 22:40:00 +0200
+
 proxmox-kernel-7.0 (7.0.14-10) trixie; urgency=medium
 
   * backport "sctp: don't free the ASCONF's own transport in DEL-IP
