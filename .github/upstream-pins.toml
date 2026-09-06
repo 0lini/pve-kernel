@@ -3,5 +3,5 @@
 # This does NOT auto-merge Proxmox packaging into the Asahi fork — it only
 # opens a PR bumping the pin so humans notice and can port relevant changes.
 
-proxmox_pve_kernel_digest = "6daa7f036b6593cd47f81d3adc07bf3a207ad842"
+proxmox_pve_kernel_digest = "e4e1a6d920843ae2b251f6e61b59c647440fcd5e"
 proxmox_pve_kernel_ref = "master"
