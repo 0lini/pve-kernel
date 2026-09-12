@@ -67,7 +67,7 @@ Architecture: any
 Provides: linux-image-@KVNAME@-@ARCH@, pve-kernel-@KVNAME@
 Suggests: pve-firmware,
 Depends: busybox, initramfs-tools | linux-initramfs-tool, ${misc:Depends},
-Recommends: @GRUB_RECOMMENDS@,
+Recommends: @GRUB_RECOMMENDS@, asahi-scripts, m1n1,
 Description: Proxmox Kernel Image
  This package contains the linux kernel and initial ramdisk used for booting
 

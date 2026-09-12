@@ -124,7 +124,8 @@ Package Build
 
 Install the resulting `proxmox-kernel-*-pve_*.deb` (and headers meta packages)
 on an Asahi/Debian arm64 system instead of `proxmox-default-kernel`, then install
-`proxmox-ve` as usual.
+`proxmox-ve` as usual. See **Testing on an Apple silicon Mac** below — these
+packages cannot be installed on macOS itself.
 
 For simple KConfig modifications you can adapt the list in `debian/rules` file.
 For quick code changes to the actual kernel code you can do them directly in
@@ -320,10 +321,97 @@ NOTE: For the exact and current list see debian/rules (PVE_CONFIG_OPTS)
 Apple silicon notes
 -------------------
 
-- Only arm64 is supported.
-- Apple DTBs are installed under `/usr/lib/modules/<kvname>/dtbs/`.
-- Booting on Apple hardware still requires the rest of the Asahi/Ubuntu Asahi
-  userspace stack (m1n1, U-Boot, firmware, etc.); this package only provides
-  the kernel/modules/headers packaging for Proxmox.
+- Only arm64 is supported. The `asahi-arm` flavour is a **16K-page** kernel;
+  a 4K kernel will not boot on Apple silicon.
+- Apple DTBs are installed at `/usr/lib/modules/<kvname>/dtbs/apple/` with
+  lookup symlinks for Debian (`/usr/lib/linux-image-<kvname>/` and
+  `...-asahi`) and Ubuntu Asahi (`/usr/lib/firmware/<kvname>/device-tree/`).
+- After `dpkg -i`, `/etc/kernel/postinst.d` runs initramfs + GRUB, and
+  `zzz-pve-asahi-m1n1` calls `update-m1n1` with this kernel's DTBs. Debian's
+  default `DTBS=/usr/lib/linux-image-*asahi*` glob would otherwise miss a
+  `*-pve` kernel name.
+- Booting still requires the rest of the Asahi userspace (m1n1, U-Boot,
+  extracted Apple firmware). This repo only packages the kernel.
 - Historical x86/Ubuntu-SAUCE PVE patches from the generic Ubuntu base were
   dropped; recover them from git history if amd64 support is restored.
+
+
+Testing on an Apple silicon Mac
+-------------------------------
+
+macOS cannot load these `.deb` packages. Dual-boot a Debian-family Asahi
+install, keep macOS as the recovery OS, then replace that kernel with this
+one. A full kernel package build is slow and needs tens of GB of disk; do
+not try to build from macOS.
+
+1. **Install Linux next to macOS** (Ubuntu Asahi or Debian Asahi / Bananas).
+   Finish the first boot so m1n1 stage1/stage2, U-Boot, GRUB, and vendor
+   firmware are already working. Confirm:
+
+   ```
+   uname -m          # aarch64
+   ls /boot/efi/m1n1/boot.bin
+   ```
+
+   Hold the power button at power-on if you need the Apple boot picker.
+   Do not delete the macOS volume.
+
+2. **Build the packages on Linux**, not on macOS. Native on the Asahi
+   install (`make ARCH=arm64 deb`) is simplest. Cross-build from another
+   Debian/Ubuntu amd64 host:
+
+   ```
+   apt install crossbuild-essential-arm64
+   rustup target add aarch64-unknown-linux-gnu
+   git clone --recursive https://github.com/0lini/pve-kernel.git
+   cd pve-kernel
+   make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- SKIPABI=1 deb
+   ```
+
+   Copy the resulting `proxmox-kernel-*_arm64.deb` and
+   `proxmox-headers-*_arm64.deb` (and the 7.0 meta packages) onto the Mac.
+
+3. **Install without dropping the working Asahi kernel yet.** Keep the
+   distro kernel installed so GRUB can boot it if the new one fails:
+
+   ```
+   sudo dpkg -i proxmox-kernel-7.0.12-3-pve_*.deb \
+                proxmox-headers-7.0.12-3-pve_*.deb \
+                proxmox-kernel-7.0_*.deb \
+                proxmox-headers-7.0_*.deb
+   ```
+
+   `dpkg` will run `update-initramfs`, `update-grub`, and `update-m1n1`.
+   Before rebooting:
+
+   ```
+   ls /usr/lib/linux-image-7.0.12-3-pve/apple/*.dtb | wc -l   # expect ~100
+   ls /boot/vmlinuz-7.0.12-3-pve /boot/initrd.img-7.0.12-3-pve
+   sudo DTBS=/usr/lib/linux-image-7.0.12-3-pve update-m1n1
+   ```
+
+   Ubuntu Asahi: if `/etc/default/update-m1n1` assigns `DTBS=`, change it to
+   `DTBS=/usr/lib/linux-image-7.0.12-3-pve` and run `update-m1n1` again.
+   Do not reboot until that command succeeds.
+
+4. **Reboot and check the kernel**, then run the live checker:
+
+   ```
+   uname -r                    # 7.0.12-3-pve
+   getconf PAGE_SIZE           # 16384
+   lsmod | grep -E 'apple|asahi|zfs'
+   debian/scripts/check-asahi-boot --live
+   ```
+
+   If the machine does not come back: hold power for the boot picker, boot
+   macOS or the previous Linux entry, then from the old kernel remove the
+   PVE packages or pick the old GRUB entry.
+
+5. **Then install Proxmox userspace** on that Debian/Ubuntu Asahi system,
+   but **do not** let `proxmox-default-kernel` replace this kernel (it is
+   the generic/x86 default). Install `proxmox-ve` after the PVE kernel
+   packages above, and keep the Asahi firmware/m1n1 stack installed.
+
+What this environment cannot verify: a real boot on your Mac (no Apple
+hardware here). `debian/scripts/check-asahi-boot` covers packaging layout;
+`--live` is what you run after the reboot in step 4.

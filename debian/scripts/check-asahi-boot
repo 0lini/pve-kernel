@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""Verify Asahi/Apple silicon packaging (static) or a live Mac install.
+
+Usage:
+  debian/scripts/check-asahi-boot           # packaging tree (CI / pre-build)
+  debian/scripts/check-asahi-boot --live    # after installing debs on Asahi
+  debian/scripts/check-asahi-boot --deb FILE.deb
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+TOP = pathlib.Path(__file__).resolve().parents[2]
+
+
+class Checks:
+    def __init__(self) -> None:
+        self.failed: list[str] = []
+        self.passed: list[str] = []
+
+    def ok(self, name: str) -> None:
+        self.passed.append(name)
+        print(f"ok   {name}")
+
+    def fail(self, name: str, detail: str) -> None:
+        self.failed.append(name)
+        print(f"FAIL {name}: {detail}")
+
+    def expect(self, name: str, cond: bool, detail: str = "") -> None:
+        if cond:
+            self.ok(name)
+        else:
+            self.fail(name, detail or "condition was false")
+
+
+def makefile_var(text: str, key: str) -> str:
+    match = re.search(rf"^{re.escape(key)}=(\S+)", text, re.M)
+    if not match:
+        raise SystemExit(f"missing {key} in Makefile")
+    return match.group(1)
+
+
+def check_dtb_layout(c: Checks) -> None:
+    """Reproduce the packaged symlink layout and Debian/Ubuntu lookup paths."""
+    kv = "7.0.12-3-pve"
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp)
+        apple = root / "usr/lib/modules" / kv / "dtbs/apple"
+        apple.mkdir(parents=True)
+        (apple / "t6000-j314s.dtb").write_bytes(b"dtb")
+        (apple / "t8103-j274.dtb").write_bytes(b"dtb")
+        linux_image = root / f"usr/lib/linux-image-{kv}"
+        linux_image.mkdir(parents=True)
+        (linux_image / "apple").symlink_to(f"../modules/{kv}/dtbs/apple")
+        (root / f"usr/lib/linux-image-{kv}-asahi").symlink_to(f"linux-image-{kv}")
+        fw = root / "usr/lib/firmware" / kv
+        fw.mkdir(parents=True)
+        (fw / "device-tree").symlink_to(f"../../modules/{kv}/dtbs")
+
+        debian_glob = sorted(
+            p for p in (root / "usr/lib").glob("linux-image-*asahi*") if p.is_dir()
+        )
+        c.expect("layout-debian-asahi-glob", bool(debian_glob), "linux-image-*asahi* missed pve kernel")
+        dtbs_dir = debian_glob[-1] if debian_glob else pathlib.Path("/missing")
+        expanded = list(dtbs_dir.glob("apple/t6*.dtb")) + list(dtbs_dir.glob("apple/t81*.dtb"))
+        c.expect(
+            "layout-m1n1-dir-expand",
+            len(expanded) == 2,
+            f"{dtbs_dir} -> {expanded}",
+        )
+        ubuntu = root / "usr/lib/firmware" / kv / "device-tree/apple"
+        c.expect("layout-ubuntu-firmware", ubuntu.is_dir() and list(ubuntu.glob("t6*.dtb")))
+
+
+def check_m1n1_hook(c: Checks) -> None:
+    hook = TOP / "debian" / "zz-pve-asahi-m1n1"
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = pathlib.Path(tmp)
+        mock = tmp_path / "update-m1n1"
+        log = tmp_path / "m1n1.log"
+        mock.write_text(
+            "#!/bin/sh\n"
+            f"echo \"DTBS=${{DTBS-unset}}\" > '{log}'\n"
+            "exit 0\n"
+        )
+        mock.chmod(0o755)
+        env = os.environ.copy()
+        env["PATH"] = f"{tmp_path}:{env.get('PATH', '')}"
+        proc = subprocess.run(
+            [str(hook), "7.0.12-3-pve"],
+            check=False,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        c.expect("hook-exits-zero-without-m1n1-bin", proc.returncode == 0, proc.stderr)
+        # Without m1n1.bin the hook should no-op (not call the mock).
+        c.expect("hook-skips-without-bootloader", not log.is_file())
+
+
+def check_packaging(c: Checks) -> None:
+    makefile = (TOP / "Makefile").read_text()
+    rules = (TOP / "debian" / "rules").read_text()
+    arm64_mk = (TOP / "debian" / "rules.d" / "arm64.mk").read_text()
+    arm64_opts = (TOP / "debian" / "rules.d" / "config-arm64.opts").read_text()
+    control = (TOP / "debian" / "control.in").read_text()
+    postinst = (TOP / "debian" / "proxmox-kernel.postinst.in").read_text()
+    hook = TOP / "debian" / "zz-pve-asahi-m1n1"
+    readme = (TOP / "README").read_text()
+
+    c.expect("arch-arm64-only", "SUPPORTED_ARCHS = arm64" in makefile)
+    c.expect("flavour-asahi-arm", "KERNEL_FLAVOUR=asahi-arm" in makefile)
+    c.expect("efi-image-vmlinuz.efi", "KERNEL_BUILD_IMAGE  = vmlinuz.efi" in arm64_mk)
+    c.expect(
+        "dtb-apple-subdir",
+        "dtbs/apple" in rules and "linux-image-$(KVNAME)" in rules,
+        "debian/rules must install DTBs under dtbs/apple and linux-image-$KVNAME",
+    )
+    c.expect(
+        "dtb-asahi-symlink",
+        "linux-image-$(KVNAME)-asahi" in rules,
+        "Debian update-m1n1 globs linux-image-*asahi*",
+    )
+    c.expect(
+        "dtb-ubuntu-firmware-symlink",
+        "device-tree" in rules and "firmware/$(KVNAME)" in rules,
+        "Ubuntu Asahi update-m1n1 looks under /lib/firmware/*/device-tree",
+    )
+    c.expect("16k-pages-pinned", "-e CONFIG_ARM64_16K_PAGES" in arm64_opts)
+    c.expect("4k-pages-disabled", "-d CONFIG_ARM64_4K_PAGES" in arm64_opts)
+    c.expect("kvm-enabled", "-e CONFIG_KVM" in arm64_opts)
+    c.expect("hook-present", hook.is_file())
+    if hook.is_file():
+        c.expect("hook-executable", os.access(hook, os.X_OK))
+        hook_text = hook.read_text()
+        c.expect("hook-calls-update-m1n1", "update-m1n1" in hook_text)
+        c.expect("hook-sets-dtbs", "DTBS=" in hook_text)
+    c.expect("hook-installed-by-rules", "zz-pve-asahi-m1n1" in rules)
+    c.expect("recommends-asahi-scripts", "asahi-scripts" in control)
+    c.expect("recommends-m1n1", re.search(r"Recommends:.*m1n1", control) is not None)
+    c.expect("postinst-runs-kernel-hooks", "/etc/kernel/postinst.d" in postinst)
+    c.expect(
+        "readme-mac-testing",
+        "Testing on an Apple silicon Mac" in readme,
+        "README must document the Mac dual-boot test path",
+    )
+    c.expect("readme-update-m1n1", "update-m1n1" in readme)
+    check_dtb_layout(c)
+    check_m1n1_hook(c)
+
+
+def check_deb(c: Checks, deb: pathlib.Path) -> None:
+    if not deb.is_file():
+        c.fail("deb-exists", str(deb))
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        data = pathlib.Path(tmp) / "data.tar"
+        subprocess.run(
+            ["dpkg-deb", "--fsys-tarfile", str(deb)],
+            check=True,
+            stdout=data.open("wb"),
+        )
+        names: list[str] = []
+        apple_dtbs = 0
+        with tarfile.open(data) as tar:
+            names = tar.getnames()
+            for name in names:
+                if "/dtbs/apple/" in name and name.endswith(".dtb"):
+                    apple_dtbs += 1
+        joined = "\n".join(names)
+        c.expect("deb-has-apple-dtbs", apple_dtbs > 0, f"found {apple_dtbs} apple dtbs")
+        print(f"     packaged Apple DTBs: {apple_dtbs}")
+        c.expect("deb-dtbs-under-modules", "/dtbs/apple/" in joined)
+        c.expect("deb-linux-image-symlink", "linux-image-" in joined)
+        c.expect("deb-m1n1-hook", "zzz-pve-asahi-m1n1" in joined)
+        c.expect("deb-vmlinuz", re.search(r"/boot/vmlinuz-", joined) is not None)
+
+
+def check_live(c: Checks) -> None:
+    uname = os.uname()
+    c.expect("live-aarch64", uname.machine == "aarch64", uname.machine)
+    version = uname.release
+    c.expect("live-pve-kernel", version.endswith("-pve"), version)
+
+    compatible = pathlib.Path("/proc/device-tree/compatible")
+    if compatible.is_file():
+        blob = compatible.read_bytes().replace(b"\x00", b" ").decode("ascii", "replace")
+        c.expect("live-apple-dt", "apple," in blob, blob[:120])
+    else:
+        c.fail("live-apple-dt", "/proc/device-tree/compatible missing")
+
+    try:
+        page = int(
+            subprocess.check_output(["getconf", "PAGE_SIZE"], text=True).strip()
+        )
+    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+        c.fail("live-16k-pages", str(exc))
+        page = 0
+    else:
+        c.expect("live-16k-pages", page == 16384, f"PAGE_SIZE={page}")
+
+    vmlinuz = pathlib.Path(f"/boot/vmlinuz-{version}")
+    c.expect("live-vmlinuz", vmlinuz.is_file(), str(vmlinuz))
+
+    dtb_dirs = [
+        pathlib.Path(f"/usr/lib/linux-image-{version}/apple"),
+        pathlib.Path(f"/usr/lib/modules/{version}/dtbs/apple"),
+    ]
+    dtb_count = 0
+    for d in dtb_dirs:
+        if d.is_dir():
+            dtb_count = max(dtb_count, len(list(d.glob("*.dtb"))))
+    c.expect("live-dtbs", dtb_count > 0, "no apple/*.dtb next to this kernel")
+    print(f"     installed Apple DTBs: {dtb_count}")
+
+    m1n1_boot = [
+        pathlib.Path("/boot/efi/m1n1/boot.bin"),
+        pathlib.Path("/boot/efi/EFI/m1n1/boot.bin"),
+    ]
+    c.expect("live-m1n1-stage2", any(p.is_file() for p in m1n1_boot), "m1n1/boot.bin not found")
+
+    lsmod = subprocess.check_output(["lsmod"], text=True, errors="replace")
+    c.expect("live-apple-modules", "apple" in lsmod or "asahi" in lsmod)
+
+    if pathlib.Path("/usr/sbin/zfs").is_file() or pathlib.Path("/sbin/zfs").is_file():
+        c.expect("live-zfs-module", "zfs" in lsmod or "spl" in lsmod)
+    else:
+        print("skip live-zfs-module (zfs userspace not installed)")
+
+    print()
+    print(f"Running kernel: {version}")
+    print("Next: install proxmox-ve without proxmox-default-kernel, then re-run --live.")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--live", action="store_true", help="check a booted Asahi/PVE kernel")
+    parser.add_argument("--deb", type=pathlib.Path, help="inspect a built proxmox-kernel .deb")
+    args = parser.parse_args()
+
+    c = Checks()
+    if args.live:
+        check_live(c)
+    elif args.deb:
+        check_deb(c, args.deb)
+    else:
+        check_packaging(c)
+
+    print()
+    print(f"{len(c.passed)} passed, {len(c.failed)} failed")
+    if c.failed:
+        print("failed checks: " + ", ".join(c.failed))
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

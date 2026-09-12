@@ -201,6 +201,7 @@ def write_report(
         "- `submodules/asahi-kernel` (Ubuntu Asahi) instead of Ubuntu generic",
         "- `Makefile` / `debian/rules` arm64 + cross-build + Apple DTB bits",
         "- `debian/rules.d/config-arm64.opts` Asahi flavour overrides",
+        "- `debian/zz-pve-asahi-m1n1` kernel hook for update-m1n1",
         "- Package `KERNEL_*` / `KREL` stay Asahi-based; Proxmox version is recorded in the pin file only",
         "",
     ]

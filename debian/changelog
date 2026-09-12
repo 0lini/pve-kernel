@@ -1,3 +1,14 @@
+proxmox-kernel-7.0 (7.0.12-3) trixie; urgency=medium
+
+  * Fix Apple DTB layout for Asahi boot: install under dtbs/apple/ and add
+    Debian linux-image-*asahi* plus Ubuntu firmware/device-tree lookup paths.
+  * Ship zzz-pve-asahi-m1n1 so update-m1n1 uses this *-pve kernel's DTBs
+    instead of the distro *asahi* glob.
+  * Pin 16K pages and KVM on arm64; recommend asahi-scripts and m1n1.
+  * Document dual-boot Mac testing (cannot install these debs on macOS).
+
+ -- Cursor Agent <cursoragent@cursor.com>  Sat, 12 Sep 2026 13:20:00 +0000
+
 proxmox-kernel-7.0 (7.0.12-2) trixie; urgency=medium
 
   * Sync applicable packaging from proxmox/pve-kernel e4e1a6d
