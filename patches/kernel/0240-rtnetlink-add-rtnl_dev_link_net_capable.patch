@@ -1,0 +1,36 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Cursor Agent <cursoragent@cursor.com>
+Date: Sat, 12 Sep 2026 14:40:00 +0000
+Subject: [PATCH] rtnetlink: add rtnl_dev_link_net_capable() for asahi-arm
+
+The Proxmox tunnel changelink CAP_NET_ADMIN series (CVE-2026-68432 and
+siblings) calls rtnl_dev_link_net_capable(). That helper is not in
+Ubuntu Asahi 7.0.0-1002.2; add the same check so those patches compile.
+
+---
+diff --git a/include/linux/rtnetlink.h b/include/linux/rtnetlink.h
+--- a/include/linux/rtnetlink.h
++++ b/include/linux/rtnetlink.h
+@@ -242,4 +242,22 @@
+ 
+ void netif_set_operstate(struct net_device *dev, int newstate);
+ 
++/**
++ * rtnl_dev_link_net_capable - CAP_NET_ADMIN in the device and link netns
++ * @dev: network device whose changelink is being processed
++ * @link_net: netns the device is linked to (tunnel / underlay netns)
++ *
++ * rtnl already checked CAP_NET_ADMIN in the request netns / dev_net(dev).
++ * Also require it in @link_net, which can differ after a netns move.
++ */
++static inline bool rtnl_dev_link_net_capable(const struct net_device *dev,
++					     struct net *link_net)
++{
++	if (!ns_capable(dev_net(dev)->user_ns, CAP_NET_ADMIN))
++		return false;
++	if (link_net && !ns_capable(link_net->user_ns, CAP_NET_ADMIN))
++		return false;
++	return true;
++}
++
+ #endif	/* __LINUX_RTNETLINK_H */

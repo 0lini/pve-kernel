@@ -14,6 +14,8 @@ proxmox-kernel-7.0 (7.0.12-3) trixie; urgency=medium
     (the equivalent fixes are already in Ubuntu-asahi-arm-7.0.0-1002.2).
   * Point RUST_LIB_SRC at rustup's sysroot so CONFIG_RUST builds without
     Debian's /usr/src/rustc-* layout.
+  * Add rtnl_dev_link_net_capable() so tunnel changelink CVE patches compile
+    on asahi-arm.
 
  -- Cursor Agent <cursoragent@cursor.com>  Sat, 12 Sep 2026 13:20:00 +0000
 
