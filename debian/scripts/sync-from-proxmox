@@ -359,6 +359,23 @@ def main() -> int:
                 zfs_note = f"OpenZFS already at {zfs_new_sha[:12]}"
                 zfs_new_sha = ""
 
+        current_patch_names = (
+            sorted(p.name for p in patch_dir.glob("*.patch")) if patch_dir.exists() else []
+        )
+        patches_changed = current_patch_names != kept
+        if not patches_changed:
+            for name in kept:
+                if (patch_dir / name).read_bytes() != (kept_dir / name).read_bytes():
+                    patches_changed = True
+                    break
+
+        already_synced = (
+            target_sha == old_pin
+            and not files_changed
+            and not zfs_new_sha
+            and not patches_changed
+        )
+
         if args.dry_run:
             write_report(
                 report_path,
@@ -373,6 +390,13 @@ def main() -> int:
                 zfs_note=zfs_note,
             )
             print(f"dry-run complete -> {report_path}")
+            return 0
+
+        if already_synced:
+            print(
+                "already in sync with Proxmox tip "
+                f"({target_short}); leaving working tree unchanged"
+            )
             return 0
 
         patch_dir.mkdir(parents=True, exist_ok=True)

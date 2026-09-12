@@ -6,6 +6,9 @@ on:
     - cron: "17 5 * * *"
   workflow_dispatch:
   push:
+    # Only auto-sync from the default branch. Feature-branch pushes that touch
+    # this workflow must not try to open a second PR (and fail CI).
+    branches: [master]
     paths:
       - ".github/upstream-pins.toml"
       - ".github/proxmox-sync.json"
@@ -29,6 +32,8 @@ jobs:
         with:
           fetch-depth: 0
           submodules: false
+          # Always sync against the default branch tip, not a feature branch.
+          ref: master
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
@@ -51,6 +56,7 @@ jobs:
         run: |
           if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard)" ] && [ -z "$(git diff --cached --name-only)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Already in sync with Proxmox; no PR needed."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
             git status --porcelain
@@ -59,10 +65,13 @@ jobs:
           fi
 
       - name: Open sync pull request
+        id: cpr
         if: steps.changes.outputs.changed == 'true'
+        continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          base: master
           branch: chore/proxmox-sync
           delete-branch: true
           title: "chore: sync applicable packaging from proxmox/pve-kernel"
@@ -91,3 +100,17 @@ jobs:
           labels: |
             dependencies
             upstream
+
+      - name: Require PR create or explain repo setting
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          if [ "${{ steps.cpr.outcome }}" = "success" ]; then
+            echo "Sync PR opened/updated: ${{ steps.cpr.outputs.pull-request-url }}"
+            exit 0
+          fi
+          echo "::error::Failed to open the sync pull request."
+          echo "The sync branch may still have been pushed (chore/proxmox-sync)."
+          echo "Most common cause: repo Setting → Actions → General → Workflow permissions"
+          echo "  → enable \"Allow GitHub Actions to create and approve pull requests\"."
+          echo "Without that checkbox, GITHUB_TOKEN cannot create PRs even with pull-requests: write."
+          exit 1
