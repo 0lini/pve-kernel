@@ -6,9 +6,12 @@ on:
     - cron: "17 5 * * *"
   workflow_dispatch:
   push:
-    # Only auto-sync from the default branch. Feature-branch pushes that touch
-    # this workflow must not try to open a second PR (and fail CI).
-    branches: [master]
+    paths:
+      - ".github/upstream-pins.toml"
+      - ".github/proxmox-sync.json"
+      - "debian/scripts/sync-from-proxmox"
+      - ".github/workflows/sync-proxmox.yml"
+  pull_request:
     paths:
       - ".github/upstream-pins.toml"
       - ".github/proxmox-sync.json"
@@ -20,20 +23,23 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: sync-proxmox
+  group: sync-proxmox-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      # Only schedule / manual / pushes to master should publish a sync PR.
+      PUBLISH_SYNC: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: false
-          # Always sync against the default branch tip, not a feature branch.
-          ref: master
+          # Publishing syncs always from master tip; PR/feature validation uses the event ref.
+          ref: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')) && 'master' || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
@@ -41,18 +47,32 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Validate sync tooling
+        if: env.PUBLISH_SYNC != 'true'
+        run: |
+          python3 -m py_compile debian/scripts/sync-from-proxmox
+          python3 -c 'import json; json.load(open(".github/proxmox-sync.json"))'
+          chmod +x debian/scripts/sync-from-proxmox
+          debian/scripts/sync-from-proxmox --dry-run --no-bump
+          git checkout -- .github/sync-report.md 2>/dev/null || rm -f .github/sync-report.md
+          echo "Validation-only run on ${{ github.ref }} (${{ github.event_name }})."
+          echo "Sync PRs are opened from schedule / workflow_dispatch / push to master."
+
       - name: Configure git identity
+        if: env.PUBLISH_SYNC == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Sync from proxmox/pve-kernel
+        if: env.PUBLISH_SYNC == 'true'
         run: |
           chmod +x debian/scripts/sync-from-proxmox
           debian/scripts/sync-from-proxmox
 
       - name: Detect changes
         id: changes
+        if: env.PUBLISH_SYNC == 'true'
         run: |
           if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard)" ] && [ -z "$(git diff --cached --name-only)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -66,7 +86,7 @@ jobs:
 
       - name: Open sync pull request
         id: cpr
-        if: steps.changes.outputs.changed == 'true'
+        if: env.PUBLISH_SYNC == 'true' && steps.changes.outputs.changed == 'true'
         continue-on-error: true
         uses: peter-evans/create-pull-request@v6
         with:
@@ -102,7 +122,7 @@ jobs:
             upstream
 
       - name: Require PR create or explain repo setting
-        if: steps.changes.outputs.changed == 'true'
+        if: env.PUBLISH_SYNC == 'true' && steps.changes.outputs.changed == 'true'
         run: |
           if [ "${{ steps.cpr.outcome }}" = "success" ]; then
             echo "Sync PR opened/updated: ${{ steps.cpr.outputs.pull-request-url }}"
