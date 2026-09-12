@@ -3,11 +3,11 @@
 - Mode: `applied`
 - Target: `e4e1a6d920843ae2b251f6e61b59c647440fcd5e` (`e4e1a6d`)
 - Proxmox package version: `7.0.14-16`
-- Previous pin: `6daa7f036b6593cd47f81d3adc07bf3a207ad842`
+- Previous pin: `e4e1a6d920843ae2b251f6e61b59c647440fcd5e`
 - Patches kept: **325**
 - Patches skipped (x86/vendor filter): **65**
-- Packaging files changed: **1**
-- ZFS: mapped Proxmox ZFS 2.4.4 -> openzfs refs/tags/zfs-2.4.4 (f75f3256a091)
+- Packaging files changed: **0**
+- ZFS: OpenZFS already at f75f3256a091
 
 ## Skipped patches
 - 0008-kvm-xsave-set-mask-out-PKRU-bit-in-xfeatures-if-vCPU.patch
@@ -77,7 +77,7 @@
 - 0386-KVM-x86-mmu-Check-write-tracking-in-all-address-spac.patch
 
 ## Packaging files to refresh
-- debian/proxmox_prevent_autoload.conf
+_none_
 
 ## Intentional Asahi overlay (never overwritten by this sync)
 

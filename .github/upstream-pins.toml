@@ -5,4 +5,4 @@
 proxmox_pve_kernel_digest = "e4e1a6d920843ae2b251f6e61b59c647440fcd5e"
 proxmox_pve_kernel_ref = "master"
 proxmox_package_version = "7.0.14-16"
-last_sync_utc = "2026-09-12T09:02:27Z"
+last_sync_utc = "2026-09-12T09:04:08Z"
