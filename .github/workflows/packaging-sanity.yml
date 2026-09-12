@@ -1,0 +1,36 @@
+name: Packaging sanity
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate sync tooling
+        run: |
+          python3 -m py_compile debian/scripts/sync-from-proxmox
+          python3 -c 'import json; json.load(open(".github/proxmox-sync.json"))'
+          test -f .github/upstream-pins.toml
+          test -d patches/kernel
+          # Ensure we did not accidentally reintroduce an empty patch tree
+          test "$(find patches/kernel -name '*.patch' | wc -l)" -gt 0
+
+      - name: Dry-run Proxmox sync (report only)
+        run: |
+          chmod +x debian/scripts/sync-from-proxmox
+          debian/scripts/sync-from-proxmox --dry-run --no-zfs --no-bump
+          test -f .github/sync-report.md
+          # Working tree must stay clean for dry-run (report is written; restore it)
+          git checkout -- .github/sync-report.md 2>/dev/null || rm -f .github/sync-report.md

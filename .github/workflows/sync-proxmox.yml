@@ -1,0 +1,93 @@
+name: Sync from Proxmox
+
+on:
+  schedule:
+    # Proxmox often lands security backports on weekdays; check daily.
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/upstream-pins.toml"
+      - ".github/proxmox-sync.json"
+      - "debian/scripts/sync-from-proxmox"
+      - ".github/workflows/sync-proxmox.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-proxmox
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync from proxmox/pve-kernel
+        run: |
+          chmod +x debian/scripts/sync-from-proxmox
+          debian/scripts/sync-from-proxmox
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard)" ] && [ -z "$(git diff --cached --name-only)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git status --porcelain
+            git diff --stat || true
+            git diff --cached --stat || true
+          fi
+
+      - name: Open sync pull request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/proxmox-sync
+          delete-branch: true
+          title: "chore: sync applicable packaging from proxmox/pve-kernel"
+          body: |
+            Automated Proxmox sync for this Asahi/arm64 fork.
+
+            This keeps packaging **as close as possible** to `proxmox/pve-kernel` while preserving the Asahi overlay:
+            - imports Proxmox `patches/kernel`, skipping x86/vendor-only patches
+            - refreshes allowlisted packaging files
+            - aligns OpenZFS to the version documented in Proxmox's changelog (via openzfs tags)
+            - updates `.github/upstream-pins.toml`
+
+            See `.github/sync-report.md` for the exact keep/skip list.
+
+            **Not auto-synced (intentional overlay):** Asahi kernel submodule, arm64/cross-build Makefile/`debian/rules`, Asahi config flavour.
+          commit-message: "chore: sync applicable packaging from proxmox/pve-kernel"
+          add-paths: |
+            patches/kernel
+            debian
+            abi-blacklist
+            .gitmodules
+            .github/upstream-pins.toml
+            .github/sync-report.md
+            Makefile
+            submodules/zfsonlinux
+          labels: |
+            dependencies
+            upstream
