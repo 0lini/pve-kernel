@@ -12,6 +12,8 @@ proxmox-kernel-7.0 (7.0.12-3) trixie; urgency=medium
   * Skip kernel patches already present in Ubuntu Asahi instead of reversing them.
   * Drop eight Proxmox CVE patches whose Asahi context does not reverse-apply
     (the equivalent fixes are already in Ubuntu-asahi-arm-7.0.0-1002.2).
+  * Point RUST_LIB_SRC at rustup's sysroot so CONFIG_RUST builds without
+    Debian's /usr/src/rustc-* layout.
 
  -- Cursor Agent <cursoragent@cursor.com>  Sat, 12 Sep 2026 13:20:00 +0000
 

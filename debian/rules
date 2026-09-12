@@ -16,6 +16,14 @@ include debian/rules.d/$(DEB_HOST_ARCH).mk
 CROSS_COMPILE ?=
 # Cross builds must strip aarch64 objects with the cross toolchain's strip
 MODULE_STRIP = $(CROSS_COMPILE)strip
+# Ubuntu Asahi's rust/Makefile defaults RUST_LIB_SRC to Debian's
+# /usr/src/rustc-$(version)/library. rustup keeps sources under the sysroot.
+ifeq ($(RUST_LIB_SRC),)
+RUSTUP_LIB_SRC := $(shell rustc --print sysroot 2>/dev/null)/lib/rustlib/src/rust/library
+ifneq ($(wildcard $(RUSTUP_LIB_SRC)/core/src/lib.rs),)
+export RUST_LIB_SRC := $(RUSTUP_LIB_SRC)
+endif
+endif
 # Embed -j here because dpkg-buildpackage often does not propagate the jobserver
 KERNEL_CROSS_MAKE = $(MAKE) -C $(KERNEL_SRC) ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -j$(shell nproc)
 
