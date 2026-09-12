@@ -1,0 +1,463 @@
+#!/usr/bin/env python3
+"""Sync this Asahi/arm64 fork toward proxmox/pve-kernel (thin overlay).
+
+- Replace patches/kernel with Proxmox patches, minus x86/vendor-only ones
+- Refresh allowlisted packaging files
+- Align OpenZFS submodule to the version Proxmox documents (openzfs tags)
+- Update .github/upstream-pins.toml
+
+Usage:
+  debian/scripts/sync-from-proxmox [--dry-run] [--ref REF] [--no-zfs] [--no-bump]
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+TOP = pathlib.Path(__file__).resolve().parents[2]
+CONFIG_PATH = TOP / ".github" / "proxmox-sync.json"
+
+
+def run(
+    cmd: list[str],
+    *,
+    check: bool = True,
+    capture: bool = False,
+    cwd: pathlib.Path | None = None,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        cmd,
+        check=check,
+        cwd=str(cwd or TOP),
+        text=True,
+        capture_output=capture,
+    )
+
+
+def git(*args: str, check: bool = True, capture: bool = False) -> subprocess.CompletedProcess[str]:
+    return run(["git", *args], check=check, capture=capture)
+
+
+def load_config() -> dict:
+    return json.loads(CONFIG_PATH.read_text())
+
+
+def makefile_var(text: str, key: str) -> str:
+    match = re.search(rf"^{re.escape(key)}=(\S+)", text, re.M)
+    if not match:
+        raise SystemExit(f"missing {key} in Makefile")
+    return match.group(1)
+
+
+def parse_makefile_version(text: str) -> str:
+    return (
+        f"{makefile_var(text, 'KERNEL_MAJ')}."
+        f"{makefile_var(text, 'KERNEL_MIN')}."
+        f"{makefile_var(text, 'KERNEL_PATCHLEVEL')}-"
+        f"{makefile_var(text, 'KREL')}"
+    )
+
+
+def subject_of(patch: pathlib.Path) -> str:
+    for line in patch.read_text(errors="replace").splitlines():
+        if line.startswith("Subject:"):
+            return line[len("Subject:") :].strip()
+    return ""
+
+
+def should_skip(name: str, subject: str, regexes: list[re.Pattern[str]]) -> bool:
+    blob = f"{name}\n{subject}"
+    return any(rx.search(blob) for rx in regexes)
+
+
+def read_old_pin(pin_file: pathlib.Path) -> str:
+    if not pin_file.exists():
+        return ""
+    match = re.search(
+        r'proxmox_pve_kernel_digest\s*=\s*"([a-f0-9]+)"',
+        pin_file.read_text(),
+    )
+    return match.group(1) if match else ""
+
+
+def ensure_remote(name: str, url: str) -> None:
+    if git("remote", "get-url", name, check=False, capture=True).returncode != 0:
+        print(f"adding remote '{name}' -> {url}")
+        git("remote", "add", name, url)
+
+
+def fetch_proxmox(remote: str, url: str, ref: str) -> None:
+    ensure_remote(remote, url)
+    if git("fetch", "--quiet", remote, ref, check=False).returncode == 0:
+        return
+    mirror = "https://git.proxmox.com/git/pve-kernel.git"
+    print(f"fetch via {url} failed; trying {mirror}", file=sys.stderr)
+    git("remote", "set-url", remote, mirror)
+    git("fetch", "--quiet", remote, ref)
+
+
+def extract_upstream(sha: str, dest: pathlib.Path, paths: list[str]) -> None:
+    existing: list[str] = []
+    for path in paths:
+        probe = git("ls-tree", "--name-only", sha, path, capture=True)
+        if probe.stdout.strip():
+            existing.append(path)
+        else:
+            print(f"warn: upstream missing {path}", file=sys.stderr)
+    if not existing:
+        raise SystemExit("no upstream paths to extract")
+    proc = subprocess.Popen(
+        ["git", "archive", sha, *existing],
+        cwd=str(TOP),
+        stdout=subprocess.PIPE,
+    )
+    assert proc.stdout is not None
+    subprocess.run(["tar", "-x", "-C", str(dest)], stdin=proc.stdout, check=True)
+    if proc.wait() != 0:
+        raise SystemExit("git archive failed")
+
+
+def zfs_version_from_changelog(text: str) -> str | None:
+    match = re.search(
+        r"update ZFS(?: module)? to ([0-9]+\.[0-9]+(?:\.[0-9]+)?)",
+        text,
+        re.I,
+    )
+    return match.group(1) if match else None
+
+
+def resolve_zfs_sha(url: str, tag: str | None, fallback_branch: str) -> tuple[str, str]:
+    if tag:
+        for candidate in (f"refs/tags/zfs-{tag}", f"refs/tags/{tag}"):
+            out = run(["git", "ls-remote", url, candidate], capture=True, check=False)
+            lines = out.stdout.strip().splitlines()
+            if lines:
+                sha = lines[0].split()[0]
+                return sha, f"mapped Proxmox ZFS {tag} -> openzfs {candidate} ({sha[:12]})"
+        return "", f"Proxmox mentions ZFS {tag}, but no matching openzfs tag was found"
+
+    out = run(
+        ["git", "ls-remote", url, f"refs/heads/{fallback_branch}"],
+        capture=True,
+        check=False,
+    )
+    lines = out.stdout.strip().splitlines()
+    if not lines:
+        return "", f"could not resolve fallback branch {fallback_branch}"
+    sha = lines[0].split()[0]
+    return sha, f"no ZFS version in Proxmox changelog; using {fallback_branch} tip {sha[:12]}"
+
+
+def write_report(
+    path: pathlib.Path,
+    *,
+    mode: str,
+    target_sha: str,
+    target_short: str,
+    proxmox_ver: str,
+    old_pin: str,
+    kept: list[str],
+    skipped: list[str],
+    files_changed: list[str],
+    zfs_note: str,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "# Proxmox sync report",
+        "",
+        f"- Mode: `{mode}`",
+        f"- Target: `{target_sha}` (`{target_short}`)",
+        f"- Proxmox package version: `{proxmox_ver}`",
+        f"- Previous pin: `{old_pin or 'none'}`",
+        f"- Patches kept: **{len(kept)}**",
+        f"- Patches skipped (x86/vendor filter): **{len(skipped)}**",
+        f"- Packaging files changed: **{len(files_changed)}**",
+        f"- ZFS: {zfs_note}",
+        "",
+        "## Skipped patches",
+    ]
+    if not skipped:
+        lines.append("_none_")
+    else:
+        lines.extend(f"- {name}" for name in skipped)
+    lines += ["", "## Packaging files to refresh"]
+    if not files_changed:
+        lines.append("_none_")
+    else:
+        lines.extend(f"- {name}" for name in files_changed)
+    lines += [
+        "",
+        "## Intentional Asahi overlay (never overwritten by this sync)",
+        "",
+        "- `submodules/asahi-kernel` (Ubuntu Asahi) instead of Ubuntu generic",
+        "- `Makefile` / `debian/rules` arm64 + cross-build + Apple DTB bits",
+        "- `debian/rules.d/config-arm64.opts` Asahi flavour overrides",
+        "- Package `KERNEL_*` / `KREL` stay Asahi-based; Proxmox version is recorded in the pin file only",
+        "",
+    ]
+    path.write_text("\n".join(lines))
+
+
+def update_pin(path: pathlib.Path, sha: str, ref: str, ver: str) -> None:
+    now = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"""# Upstream pins for Renovate + debian/scripts/sync-from-proxmox.
+# Renovate may bump the digest when proxmox/pve-kernel moves.
+# Prefer running the sync workflow afterward — bumping this pin alone is not a port.
+
+proxmox_pve_kernel_digest = "{sha}"
+proxmox_pve_kernel_ref = "{ref}"
+proxmox_package_version = "{ver}"
+last_sync_utc = "{now}"
+"""
+    )
+
+
+def set_gitmodules_branch(submodule_path: str, branch: str) -> None:
+    path = TOP / ".gitmodules"
+    text = path.read_text()
+    # .gitmodules entries are typically tab-indented.
+    pattern = re.compile(
+        rf"([ \t]*path = {re.escape(submodule_path)}\n"
+        rf"[ \t]*url = [^\n]+\n"
+        rf"[ \t]*branch = )[^\n]*"
+    )
+    text2, count = pattern.subn(rf"\g<1>{branch}", text, count=1)
+    if not count:
+        text2 = re.sub(
+            rf"([ \t]*path = {re.escape(submodule_path)}\n[ \t]*url = [^\n]+\n)",
+            rf"\1\tbranch = {branch}\n",
+            text,
+            count=1,
+        )
+    path.write_text(text2)
+    print(f".gitmodules branch for {submodule_path} -> {branch}")
+
+
+def bump_krel_and_changelog(
+    *,
+    target_short: str,
+    proxmox_ver: str,
+    kept: int,
+    skipped: int,
+) -> str:
+    mk_path = TOP / "Makefile"
+    text = mk_path.read_text()
+    maj = makefile_var(text, "KERNEL_MAJ")
+    mn = makefile_var(text, "KERNEL_MIN")
+    pl = makefile_var(text, "KERNEL_PATCHLEVEL")
+    krel = int(makefile_var(text, "KREL"))
+    new_krel = krel + 1
+    mk_path.write_text(
+        re.sub(r"^KREL=\d+", f"KREL={new_krel}", text, count=1, flags=re.M)
+    )
+    pkg_ver = f"{maj}.{mn}.{pl}-{new_krel}"
+
+    name = git("config", "user.name", check=False, capture=True).stdout.strip() or "pve-kernel sync"
+    email = (
+        git("config", "user.email", check=False, capture=True).stdout.strip()
+        or "noreply@localhost"
+    )
+    now = dt.datetime.now().astimezone().strftime("%a, %d %b %Y %H:%M:%S %z")
+    entry = f"""proxmox-kernel-{maj}.{mn} ({pkg_ver}) trixie; urgency=medium
+
+  * Sync applicable packaging from proxmox/pve-kernel {target_short}
+    (upstream package {proxmox_ver}): keep {kept} patches, skip {skipped} x86/vendor.
+  * Refresh allowlisted packaging files and OpenZFS pin when documented upstream.
+  * Generated by debian/scripts/sync-from-proxmox.
+
+ -- {name} <{email}>  {now}
+
+"""
+    changelog = TOP / "debian" / "changelog"
+    changelog.write_text(entry + changelog.read_text())
+    print(f"bumped KREL -> {new_krel}; changelog {pkg_ver}")
+    return pkg_ver
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--ref", help="Proxmox git ref to sync (default: configured ref)")
+    parser.add_argument("--no-zfs", action="store_true")
+    parser.add_argument("--no-bump", action="store_true", help="Do not bump KREL/changelog")
+    args = parser.parse_args()
+
+    cfg = load_config()
+    remote = cfg["proxmox_remote"]
+    url = cfg["proxmox_url"]
+    default_ref = cfg["proxmox_ref"]
+    patch_dir = TOP / cfg["patch_dir"]
+    pin_file = TOP / cfg["pin_file"]
+    report_path = TOP / cfg["report_path"]
+    sync_files: list[str] = cfg["sync_files"]
+    skip_regexes = [re.compile(pattern) for pattern in cfg["skip_patch_regexes"]]
+    zfs_path = cfg["zfs"]["submodule_path"]
+    zfs_url = cfg["zfs"]["github_url"]
+    zfs_fallback = cfg["zfs"]["fallback_branch"]
+
+    fetch_proxmox(remote, url, default_ref)
+    target_ref = args.ref or f"{remote}/{default_ref}"
+    target_sha = git("rev-parse", target_ref, capture=True).stdout.strip()
+    target_short = git("rev-parse", "--short", target_sha, capture=True).stdout.strip()
+    old_pin = read_old_pin(pin_file)
+    print(f"sync target: {target_sha} (previous pin: {old_pin or 'none'})")
+
+    extract_paths = ["patches/kernel", "Makefile", "debian/changelog", *sync_files]
+
+    with tempfile.TemporaryDirectory(prefix="pve-sync-") as tmp:
+        work = pathlib.Path(tmp)
+        extract_upstream(target_sha, work, extract_paths)
+
+        kept: list[str] = []
+        skipped: list[str] = []
+        src_patches = work / "patches" / "kernel"
+        kept_dir = work / "kept"
+        kept_dir.mkdir()
+        for patch in sorted(src_patches.glob("*.patch")):
+            subject = subject_of(patch)
+            if should_skip(patch.name, subject, skip_regexes):
+                skipped.append(patch.name)
+            else:
+                shutil.copy2(patch, kept_dir / patch.name)
+                kept.append(patch.name)
+        print(f"patches: keep={len(kept)} skip_x86={len(skipped)}")
+
+        files_changed: list[str] = []
+        for rel in sync_files:
+            src = work / rel
+            dst = TOP / rel
+            if not src.exists():
+                continue
+            if (not dst.exists()) or src.read_bytes() != dst.read_bytes():
+                files_changed.append(rel)
+
+        proxmox_ver = parse_makefile_version((work / "Makefile").read_text())
+
+        zfs_note = "unchanged (--no-zfs)"
+        zfs_new_sha = ""
+        zfs_tag: str | None = None
+        current = git("rev-parse", f"HEAD:{zfs_path}", check=False, capture=True)
+        current_zfs_sha = current.stdout.strip() if current.returncode == 0 else ""
+
+        if not args.no_zfs:
+            zfs_tag = zfs_version_from_changelog((work / "debian" / "changelog").read_text())
+            if zfs_tag:
+                print(f"Proxmox changelog ZFS version: {zfs_tag}")
+            zfs_new_sha, zfs_note = resolve_zfs_sha(zfs_url, zfs_tag, zfs_fallback)
+            if zfs_new_sha and zfs_new_sha == current_zfs_sha:
+                zfs_note = f"OpenZFS already at {zfs_new_sha[:12]}"
+                zfs_new_sha = ""
+
+        current_patch_names = (
+            sorted(p.name for p in patch_dir.glob("*.patch")) if patch_dir.exists() else []
+        )
+        patches_changed = current_patch_names != kept
+        if not patches_changed:
+            for name in kept:
+                if (patch_dir / name).read_bytes() != (kept_dir / name).read_bytes():
+                    patches_changed = True
+                    break
+
+        already_synced = (
+            target_sha == old_pin
+            and not files_changed
+            and not zfs_new_sha
+            and not patches_changed
+        )
+
+        if args.dry_run:
+            write_report(
+                report_path,
+                mode="dry-run",
+                target_sha=target_sha,
+                target_short=target_short,
+                proxmox_ver=proxmox_ver,
+                old_pin=old_pin,
+                kept=kept,
+                skipped=skipped,
+                files_changed=files_changed,
+                zfs_note=zfs_note,
+            )
+            print(f"dry-run complete -> {report_path}")
+            return 0
+
+        if already_synced:
+            print(
+                "already in sync with Proxmox tip "
+                f"({target_short}); leaving working tree unchanged"
+            )
+            return 0
+
+        patch_dir.mkdir(parents=True, exist_ok=True)
+        for old in patch_dir.glob("*.patch"):
+            old.unlink()
+        for name in kept:
+            shutil.copy2(kept_dir / name, patch_dir / name)
+
+        for rel in files_changed:
+            src = work / rel
+            dst = TOP / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            if os.access(src, os.X_OK):
+                dst.chmod(dst.stat().st_mode | 0o111)
+
+        if zfs_new_sha:
+            git(
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"160000,{zfs_new_sha},{zfs_path}",
+            )
+            if zfs_tag:
+                majmin = ".".join(zfs_tag.split(".")[:2])
+                branch = f"zfs-{majmin}-release"
+                probe = run(
+                    ["git", "ls-remote", "--exit-code", zfs_url, f"refs/heads/{branch}"],
+                    check=False,
+                    capture=True,
+                )
+                if probe.returncode == 0:
+                    set_gitmodules_branch(zfs_path, branch)
+
+        update_pin(pin_file, target_sha, default_ref, proxmox_ver)
+        write_report(
+            report_path,
+            mode="applied",
+            target_sha=target_sha,
+            target_short=target_short,
+            proxmox_ver=proxmox_ver,
+            old_pin=old_pin,
+            kept=kept,
+            skipped=skipped,
+            files_changed=files_changed,
+            zfs_note=zfs_note,
+        )
+
+        status = git("status", "--porcelain", capture=True).stdout
+        if status and not args.no_bump:
+            bump_krel_and_changelog(
+                target_short=target_short,
+                proxmox_ver=proxmox_ver,
+                kept=len(kept),
+                skipped=len(skipped),
+            )
+
+        print(f"sync complete -> {report_path}")
+        print("review with: git status && git diff --stat")
+        return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

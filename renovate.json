@@ -27,13 +27,15 @@
       "groupName": "openzfs"
     },
     {
-      "description": "Proxmox packaging tip (informational pin; review patches manually)",
+      "description": "Proxmox packaging tip — prefer the sync-proxmox workflow over merging pin-only PRs",
       "matchManagers": ["custom.regex"],
       "matchDepNames": ["proxmox/pve-kernel"],
       "groupName": "proxmox pve-kernel",
       "commitMessageTopic": "proxmox/pve-kernel",
       "prBodyNotes": [
-        "Proxmox updates often include **x86-only** patches. Review `debian/changelog` and `patches/` on upstream before porting anything into this Asahi/arm64 fork."
+        "This pin is a **drift signal**. Do not merge it alone.",
+        "Run (or wait for) `.github/workflows/sync-proxmox.yml` / `debian/scripts/sync-from-proxmox`, which ports applicable patches and packaging while skipping x86-only series.",
+        "See `.github/sync-report.md` after a sync for the keep/skip list."
       ]
     }
   ],

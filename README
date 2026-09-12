@@ -56,24 +56,59 @@ described below:
  mk-build-deps -ir BUILD-DIR/debian/control
 
 
+Staying close to Proxmox (automated)
+------------------------------------
+
+This fork is intentionally a **thin Asahi/arm64 overlay** on
+`proxmox/pve-kernel`. Packaging that can stay identical is synced
+automatically; only Apple-silicon-specific bits remain local.
+
+Daily GitHub Action (`.github/workflows/sync-proxmox.yml`) runs:
+
+```
+debian/scripts/sync-from-proxmox
+```
+
+That tool:
+
+- replaces `patches/kernel` with Proxmox's series, minus x86/vendor-only patches
+  (filter rules in `.github/proxmox-sync.json`)
+- refreshes allowlisted packaging files (`config-common.opts`, prevent-autoload,
+  abi helpers, …)
+- aligns `submodules/zfsonlinux` to the OpenZFS version documented in Proxmox's
+  changelog (mapped onto `openzfs/zfs` tags; Proxmox's private gitlinks are not used)
+- updates `.github/upstream-pins.toml` and writes `.github/sync-report.md`
+- bumps local `KREL` + `debian/changelog` when something actually changed
+
+Manual / one-off:
+
+```
+debian/scripts/sync-from-proxmox --dry-run   # report only
+debian/scripts/sync-from-proxmox             # apply + bump
+```
+
+**Not overwritten by sync (Asahi overlay):** `submodules/asahi-kernel`, arm64/cross
+build logic in `Makefile`/`debian/rules`, Asahi flavour config opts, and the
+Asahi-based `KERNEL_*` version numbers.
+
 Upstream tracking (Renovate)
 ----------------------------
 
-This repo is set up for [Renovate](https://docs.renovatebot.com/) to open PRs when
-upstream pins move:
+[Renovate](https://docs.renovatebot.com/) opens PRs when pins move:
 
 - `submodules/asahi-kernel` — newer `Ubuntu-asahi-arm-*` packaging tags
-- `submodules/zfsonlinux` — tip of `zfs-2.3-release`
-- `.github/upstream-pins.toml` — Proxmox `pve-kernel` `master` digest (notice only;
-  x86/CVE backports still need a human to port)
+- `submodules/zfsonlinux` — tip of the tracked OpenZFS release branch
+  (overridden when the Proxmox sync pins an exact ZFS release)
+- `.github/upstream-pins.toml` — Proxmox `pve-kernel` digest; prefer the
+  sync workflow over merging pin-only PRs
 
-Enable it once for the GitHub repo:
+Enable once:
 
 1. Install the [Renovate GitHub App](https://github.com/apps/renovate) on `0lini/pve-kernel`
-2. Merge this config (`renovate.json`)
-3. Renovate will open a Dependency Dashboard issue/PR and follow-up update PRs
+2. Merge `renovate.json`
+3. Keep `.github/workflows/sync-proxmox.yml` enabled so Proxmox moves become real ports
 
-Renovate does **not** build `.deb` packages; it only tracks version drift.
+Renovate does **not** build `.deb` packages; the sync workflow ports packaging.
 
 
 Package Build

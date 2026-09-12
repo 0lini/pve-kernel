@@ -1,0 +1,136 @@
+name: Sync from Proxmox
+
+on:
+  schedule:
+    # Proxmox often lands security backports on weekdays; check daily.
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/upstream-pins.toml"
+      - ".github/proxmox-sync.json"
+      - "debian/scripts/sync-from-proxmox"
+      - ".github/workflows/sync-proxmox.yml"
+  pull_request:
+    paths:
+      - ".github/upstream-pins.toml"
+      - ".github/proxmox-sync.json"
+      - "debian/scripts/sync-from-proxmox"
+      - ".github/workflows/sync-proxmox.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-proxmox-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      # Only schedule / manual / pushes to master should publish a sync PR.
+      PUBLISH_SYNC: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+          # Publishing syncs always from master tip; PR/feature validation uses the event ref.
+          ref: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master')) && 'master' || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate sync tooling
+        if: env.PUBLISH_SYNC != 'true'
+        run: |
+          python3 -m py_compile debian/scripts/sync-from-proxmox
+          python3 -c 'import json; json.load(open(".github/proxmox-sync.json"))'
+          chmod +x debian/scripts/sync-from-proxmox
+          debian/scripts/sync-from-proxmox --dry-run --no-bump
+          git checkout -- .github/sync-report.md 2>/dev/null || rm -f .github/sync-report.md
+          echo "Validation-only run on ${{ github.ref }} (${{ github.event_name }})."
+          echo "Sync PRs are opened from schedule / workflow_dispatch / push to master."
+
+      - name: Configure git identity
+        if: env.PUBLISH_SYNC == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync from proxmox/pve-kernel
+        if: env.PUBLISH_SYNC == 'true'
+        run: |
+          chmod +x debian/scripts/sync-from-proxmox
+          debian/scripts/sync-from-proxmox
+
+      - name: Detect changes
+        id: changes
+        if: env.PUBLISH_SYNC == 'true'
+        run: |
+          if git diff --quiet && [ -z "$(git ls-files --others --exclude-standard)" ] && [ -z "$(git diff --cached --name-only)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Already in sync with Proxmox; no PR needed."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git status --porcelain
+            git diff --stat || true
+            git diff --cached --stat || true
+          fi
+
+      - name: Open sync pull request
+        id: cpr
+        if: env.PUBLISH_SYNC == 'true' && steps.changes.outputs.changed == 'true'
+        continue-on-error: true
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          base: master
+          branch: chore/proxmox-sync
+          delete-branch: true
+          title: "chore: sync applicable packaging from proxmox/pve-kernel"
+          body: |
+            Automated Proxmox sync for this Asahi/arm64 fork.
+
+            This keeps packaging **as close as possible** to `proxmox/pve-kernel` while preserving the Asahi overlay:
+            - imports Proxmox `patches/kernel`, skipping x86/vendor-only patches
+            - refreshes allowlisted packaging files
+            - aligns OpenZFS to the version documented in Proxmox's changelog (via openzfs tags)
+            - updates `.github/upstream-pins.toml`
+
+            See `.github/sync-report.md` for the exact keep/skip list.
+
+            **Not auto-synced (intentional overlay):** Asahi kernel submodule, arm64/cross-build Makefile/`debian/rules`, Asahi config flavour.
+          commit-message: "chore: sync applicable packaging from proxmox/pve-kernel"
+          add-paths: |
+            patches/kernel
+            debian
+            abi-blacklist
+            .gitmodules
+            .github/upstream-pins.toml
+            .github/sync-report.md
+            Makefile
+            submodules/zfsonlinux
+          labels: |
+            dependencies
+            upstream
+
+      - name: Require PR create or explain repo setting
+        if: env.PUBLISH_SYNC == 'true' && steps.changes.outputs.changed == 'true'
+        run: |
+          if [ "${{ steps.cpr.outcome }}" = "success" ]; then
+            echo "Sync PR opened/updated: ${{ steps.cpr.outputs.pull-request-url }}"
+            exit 0
+          fi
+          echo "::error::Failed to open the sync pull request."
+          echo "The sync branch may still have been pushed (chore/proxmox-sync)."
+          echo "Most common cause: repo Setting → Actions → General → Workflow permissions"
+          echo "  → enable \"Allow GitHub Actions to create and approve pull requests\"."
+          echo "Without that checkbox, GITHUB_TOKEN cannot create PRs even with pull-requests: write."
+          exit 1
