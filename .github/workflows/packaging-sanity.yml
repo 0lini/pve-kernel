@@ -21,11 +21,14 @@ jobs:
       - name: Validate sync tooling
         run: |
           python3 -m py_compile debian/scripts/sync-from-proxmox
+          python3 -m py_compile debian/scripts/check-asahi-boot
           python3 -c 'import json; json.load(open(".github/proxmox-sync.json"))'
           test -f .github/upstream-pins.toml
           test -d patches/kernel
           # Ensure we did not accidentally reintroduce an empty patch tree
           test "$(find patches/kernel -name '*.patch' | wc -l)" -gt 0
+          test -x debian/zz-pve-asahi-m1n1
+          debian/scripts/check-asahi-boot
 
       - name: Dry-run Proxmox sync (report only)
         run: |

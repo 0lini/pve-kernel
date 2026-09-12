@@ -1,3 +1,25 @@
+proxmox-kernel-7.0 (7.0.12-3) trixie; urgency=medium
+
+  * Fix Apple DTB layout for Asahi boot: install under dtbs/apple/ and add
+    Debian linux-image-*asahi* plus Ubuntu firmware/device-tree lookup paths.
+  * Ship zzz-pve-asahi-m1n1 so update-m1n1 uses this *-pve kernel's DTBs
+    instead of the distro *asahi* glob.
+  * Pin 16K pages and KVM on arm64; recommend asahi-scripts and m1n1.
+  * Document dual-boot Mac testing (cannot install these debs on macOS).
+  * Refresh CVE-2026-72398 SCTP cookie INIT check to apply on asahi-arm.
+  * Refresh CVE-2026-72034 fhandle detached-mount check for asahi-arm.
+  * Refresh CVE-2026-74708 XSK launch-time metadata validation for asahi-arm.
+  * Skip kernel patches already present in Ubuntu Asahi instead of
+    reversing them.
+  * Drop eight Proxmox CVE patches whose Asahi context does not reverse-apply
+    (the equivalent fixes are already in Ubuntu-asahi-arm-7.0.0-1002.2).
+  * Point RUST_LIB_SRC at rustup's sysroot so CONFIG_RUST builds without
+    Debian's /usr/src/rustc-* layout.
+  * Add rtnl_dev_link_net_capable() so tunnel changelink CVE patches compile
+    on asahi-arm.
+
+ -- Cursor Agent <cursoragent@cursor.com>  Sat, 12 Sep 2026 13:20:00 +0000
+
 proxmox-kernel-7.0 (7.0.12-2) trixie; urgency=medium
 
   * Sync applicable packaging from proxmox/pve-kernel e4e1a6d

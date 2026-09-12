@@ -25,16 +25,12 @@ Signed-off-by: Sasha Levin <sashal@kernel.org>
 (cherry picked from commit bc63d47611c07b0d5d655fe1a590861931527920)
 CVE-2026-74708
 Signed-off-by: Thomas Lamprecht <t.lamprecht@proxmox.com>
+(refreshed for asahi-arm: generic path still uses one-arg metadata helper)
 ---
- include/net/xdp_sock_drv.h | 17 +++++++++++++----
- net/xdp/xsk.c              | 11 ++++++-----
- 2 files changed, 19 insertions(+), 9 deletions(-)
-
 diff --git a/include/net/xdp_sock_drv.h b/include/net/xdp_sock_drv.h
-index 46797645a0c241b9e2af19fff39e11508bbd7644..68a78760135721190daa74ce8d764d74bc138fd8 100644
 --- a/include/net/xdp_sock_drv.h
 +++ b/include/net/xdp_sock_drv.h
-@@ -260,21 +260,28 @@ xsk_buff_raw_get_ctx(const struct xsk_buff_pool *pool, u64 addr)
+@@ -260,21 +260,28 @@
  	0)
  
  static inline bool
@@ -66,7 +62,7 @@ index 46797645a0c241b9e2af19fff39e11508bbd7644..68a78760135721190daa74ce8d764d74
  		return NULL; /* no way to signal the error to the user */
  
  	return meta;
-@@ -469,7 +476,9 @@ xsk_buff_raw_get_ctx(const struct xsk_buff_pool *pool, u64 addr)
+@@ -469,7 +476,9 @@
  	return (struct xdp_desc_ctx){ };
  }
  
@@ -78,13 +74,12 @@ index 46797645a0c241b9e2af19fff39e11508bbd7644..68a78760135721190daa74ce8d764d74
  	return false;
  }
 diff --git a/net/xdp/xsk.c b/net/xdp/xsk.c
-index 561368f26985598d9c35caa6573a3135f4907040..d2d52e3f3eeab66cd6143ed89be6aa4c2cca588a 100644
 --- a/net/xdp/xsk.c
 +++ b/net/xdp/xsk.c
-@@ -684,15 +684,16 @@ static int xsk_skb_metadata(struct sk_buff *skb, void *buffer,
+@@ -683,15 +683,16 @@
+ 			    u32 hr)
  {
  	struct xsk_tx_metadata *meta = NULL;
- 	u16 csum_start, csum_offset;
 +	u64 flags;
  
  	if (unlikely(pool->tx_metadata_len == 0))
@@ -97,10 +92,10 @@ index 561368f26985598d9c35caa6573a3135f4907040..d2d52e3f3eeab66cd6143ed89be6aa4c
  
 -	if (meta->flags & XDP_TXMD_FLAGS_CHECKSUM) {
 +	if (flags & XDP_TXMD_FLAGS_CHECKSUM) {
- 		csum_start = READ_ONCE(meta->request.csum_start);
- 		csum_offset = READ_ONCE(meta->request.csum_offset);
- 
-@@ -713,9 +714,9 @@ static int xsk_skb_metadata(struct sk_buff *skb, void *buffer,
+ 		if (unlikely(meta->request.csum_start +
+ 			     meta->request.csum_offset +
+ 			     sizeof(__sum16) > desc->len))
+@@ -710,9 +711,9 @@
  		}
  	}
  

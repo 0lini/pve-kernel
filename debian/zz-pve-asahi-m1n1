@@ -1,0 +1,53 @@
+#!/bin/sh
+# Rebuild m1n1 stage2 with this kernel's Apple DTBs.
+#
+# Debian's update-m1n1 defaults to /usr/lib/linux-image-*asahi*, which does
+# not match proxmox-kernel's KVNAME (for example 7.0.12-3-pve). This hook
+# points DTBS at the kernel being installed when our DTB layout is present.
+#
+# Invoked by run-parts from the kernel maintainer scripts:
+#   $1 = kernel version, $2 = /boot/vmlinuz-<version>
+
+set -u
+
+version="${1:-}"
+[ -n "$version" ] || exit 0
+
+if ! command -v update-m1n1 >/dev/null 2>&1; then
+	exit 0
+fi
+
+# Debian asahi-scripts; Ubuntu Asahi uses /usr/lib/asahi-boot/m1n1.bin.
+if [ ! -e /usr/lib/m1n1/m1n1.bin ] && [ ! -e /usr/lib/asahi-boot/m1n1.bin ]; then
+	exit 0
+fi
+
+dtbs_dir=""
+if [ -d "/usr/lib/linux-image-${version}/apple" ]; then
+	dtbs_dir="/usr/lib/linux-image-${version}"
+elif [ -d "/usr/lib/modules/${version}/dtbs/apple" ]; then
+	dtbs_dir="/usr/lib/modules/${version}/dtbs"
+fi
+
+warn_ubuntu_override() {
+	if [ -f /etc/default/update-m1n1 ] && grep -q '^[[:space:]]*DTBS=' /etc/default/update-m1n1; then
+		echo "W: /etc/default/update-m1n1 sets DTBS= and may ignore this kernel's device trees." >&2
+		if [ -n "$dtbs_dir" ]; then
+			echo "W: Set DTBS=$dtbs_dir in that file and run: update-m1n1" >&2
+		fi
+	fi
+}
+
+if [ -n "$dtbs_dir" ]; then
+	echo "Updating m1n1 with Apple DTBs from $dtbs_dir"
+	warn_ubuntu_override
+	if ! DTBS="$dtbs_dir" update-m1n1; then
+		echo "W: update-m1n1 failed; Apple hardware may not boot this kernel until it succeeds." >&2
+		echo "W: Retry with: DTBS=$dtbs_dir update-m1n1" >&2
+	fi
+else
+	# Removal, or a non-PVE kernel: let distro defaults pick another DTB set.
+	update-m1n1 || true
+fi
+
+exit 0

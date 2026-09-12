@@ -16,6 +16,14 @@ include debian/rules.d/$(DEB_HOST_ARCH).mk
 CROSS_COMPILE ?=
 # Cross builds must strip aarch64 objects with the cross toolchain's strip
 MODULE_STRIP = $(CROSS_COMPILE)strip
+# Ubuntu Asahi's rust/Makefile defaults RUST_LIB_SRC to Debian's
+# /usr/src/rustc-$(version)/library. rustup keeps sources under the sysroot.
+ifeq ($(RUST_LIB_SRC),)
+RUSTUP_LIB_SRC := $(shell rustc --print sysroot 2>/dev/null)/lib/rustlib/src/rust/library
+ifneq ($(wildcard $(RUSTUP_LIB_SRC)/core/src/lib.rs),)
+export RUST_LIB_SRC := $(RUSTUP_LIB_SRC)
+endif
+endif
 # Embed -j here because dpkg-buildpackage often does not propagate the jobserver
 KERNEL_CROSS_MAKE = $(MAKE) -C $(KERNEL_SRC) ARCH=$(KERNEL_BUILD_ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -j$(shell nproc)
 
@@ -161,11 +169,28 @@ endif
 	rm -f debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/source
 	rm -f debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/build
 
-	# Install Apple Silicon device trees (required for Asahi boot)
+	# Install Apple Silicon device trees (required for Asahi/m1n1 boot).
+	# Keep the vendor subdirectory so update-m1n1 can expand a directory to
+	# ${DTBS}/apple/t6*.dtb ${DTBS}/apple/t81*.dtb. Also install Debian and
+	# Ubuntu Asahi lookup paths as symlinks so distro globs resolve.
 	if [ -d $(KERNEL_SRC)/arch/arm64/boot/dts/apple ]; then \
-		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs; \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs/apple; \
 		install -m 0644 $(KERNEL_SRC)/arch/arm64/boot/dts/apple/*.dtb \
-			debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs/; \
+			debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs/apple/; \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/linux-image-$(KVNAME); \
+		ln -s ../modules/$(KVNAME)/dtbs/apple \
+			debian/$(PMX_KERNEL_PKG)/usr/lib/linux-image-$(KVNAME)/apple; \
+		ln -s linux-image-$(KVNAME) \
+			debian/$(PMX_KERNEL_PKG)/usr/lib/linux-image-$(KVNAME)-asahi; \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/firmware/$(KVNAME); \
+		ln -s ../../modules/$(KVNAME)/dtbs \
+			debian/$(PMX_KERNEL_PKG)/usr/lib/firmware/$(KVNAME)/device-tree; \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/etc/kernel/postinst.d; \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/etc/kernel/postrm.d; \
+		install -m 0755 debian/zz-pve-asahi-m1n1 \
+			debian/$(PMX_KERNEL_PKG)/etc/kernel/postinst.d/zzz-pve-asahi-m1n1; \
+		install -m 0755 debian/zz-pve-asahi-m1n1 \
+			debian/$(PMX_KERNEL_PKG)/etc/kernel/postrm.d/zzz-pve-asahi-m1n1; \
 	fi
 
 	# copy signing template contents

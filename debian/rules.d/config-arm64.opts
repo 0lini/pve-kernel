@@ -5,5 +5,13 @@
 # 16K pages where required by the flavour, and related options.
 # Common PVE options are in config-common.opts.
 
+# Apple silicon does not boot a 4K-page kernel. Pin 16K in case a common
+# option or olddefconfig would flip the flavour default.
+-e CONFIG_ARM64_16K_PAGES
+-d CONFIG_ARM64_4K_PAGES
+
 # RUST (needed for DRM Asahi) requires GENDWARFKSYMS when MODVERSIONS is on
 -e CONFIG_GENDWARFKSYMS
+
+# Proxmox needs KVM on the host (inherited from Ubuntu master; keep explicit)
+-e CONFIG_KVM

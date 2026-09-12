@@ -6,7 +6,7 @@ KERNEL_MIN=0
 KERNEL_PATCHLEVEL=12
 # increment KREL for every published package release!
 # rebuild packages with new KREL and run 'make abiupdate'
-KREL=2
+KREL=3
 
 # Use to create a separate package for the same version, like -bpoXY for backport or test-$foo.
 # This way the package can be co-installed with the original, a requirement for major dist updates.
@@ -150,7 +150,14 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 	set -e; cd $(BUILD_DIR)/$(KERNEL_SRC); \
 	  for patch in ../../patches/kernel/*.patch; do \
 	    echo "applying patch '$$patch'"; \
-	    patch --batch -p1 < "$${patch}"; \
+	    if patch --dry-run --batch --forward -p1 < "$${patch}" >/dev/null 2>&1; then \
+	      patch --batch --forward -p1 < "$${patch}"; \
+	    elif patch --batch --reverse --dry-run -p1 < "$${patch}" >/dev/null 2>&1; then \
+	      echo "already applied, skipping $$patch"; \
+	    else \
+	      echo "FAILED to apply $$patch"; \
+	      exit 1; \
+	    fi; \
 	  done
 	touch $@
 

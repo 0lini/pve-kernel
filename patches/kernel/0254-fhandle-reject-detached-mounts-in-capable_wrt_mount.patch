@@ -32,20 +32,47 @@ Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
 (cherry picked from commit 6ee183d89261bf1d1cf9f06d80a40dab8f36ee55)
 CVE-2026-72034
 Signed-off-by: Thomas Lamprecht <t.lamprecht@proxmox.com>
+(refreshed for asahi-arm: helper did not exist; inline may_decode_fh check)
 ---
- fs/fhandle.c | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
-
 diff --git a/fs/fhandle.c b/fs/fhandle.c
-index 1ca7eb3a6cb51655d4198e0b931ba55cdf7d819f..f8829231e3d758ee0a620ff45a6f24a3b21d5734 100644
 --- a/fs/fhandle.c
 +++ b/fs/fhandle.c
-@@ -295,7 +295,7 @@ static bool capable_wrt_mount(struct mount *mount)
- 	 */
- 	guard(rcu)();
- 	mnt_ns = READ_ONCE(mount->mnt_ns);
--	return ns_capable(mnt_ns->user_ns, CAP_SYS_ADMIN);
-+	return mnt_ns && ns_capable(mnt_ns->user_ns, CAP_SYS_ADMIN);
+@@ -12,6 +12,7 @@
+ #include <linux/uaccess.h>
+ #include <linux/compat.h>
+ #include <linux/nsfs.h>
++#include <linux/rcupdate.h>
+ #include "internal.h"
+ #include "mount.h"
+ 
+@@ -285,6 +286,20 @@
+ 	return 0;
  }
  
++static bool capable_wrt_mount(struct mount *mount)
++{
++	struct mnt_namespace *mnt_ns;
++
++	/*
++	 * is_mounted() is not stable vs umount_tree() clearing mnt_ns on a
++	 * detached OPEN_TREE_CLONE mount. Observe mnt_ns under RCU and fail
++	 * closed when it is already NULL (CVE-2026-72034).
++	 */
++	guard(rcu)();
++	mnt_ns = READ_ONCE(mount->mnt_ns);
++	return mnt_ns && ns_capable(mnt_ns->user_ns, CAP_SYS_ADMIN);
++}
++
  static inline int may_decode_fh(struct handle_to_path_ctx *ctx,
+ 				unsigned int o_flags)
+ {
+@@ -320,8 +335,7 @@
+ 	if (ns_capable(root->mnt->mnt_sb->s_user_ns, CAP_SYS_ADMIN))
+ 		ctx->flags = HANDLE_CHECK_PERMS;
+ 	else if (is_mounted(root->mnt) &&
+-		 ns_capable(real_mount(root->mnt)->mnt_ns->user_ns,
+-			    CAP_SYS_ADMIN) &&
++		 capable_wrt_mount(real_mount(root->mnt)) &&
+ 		 !has_locked_children(real_mount(root->mnt), root->dentry))
+ 		ctx->flags = HANDLE_CHECK_PERMS | HANDLE_CHECK_SUBTREE;
+ 	else
