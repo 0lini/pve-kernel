@@ -36,7 +36,15 @@
     "(?i)mlx5",
     "(?i)vmxnet3",
     "(?i)denverton",
-    "(?i)[Hh]yper-?[Vv]"
+    "(?i)[Hh]yper-?[Vv]",
+    "rds-Fix-inet6_addr_lst-NULL-dereference",
+    "sch_teql-Introduce-slaves_lock",
+    "watchdog-fix-refcount-tracking-races",
+    "posix-timers-Expand-timer_-re-arm",
+    "apparmor-don-t-audit-files-pointing-to-aa_null",
+    "apparmor-fix-shadowing-of-plabel",
+    "raid5-use-stripe-state-snapshot",
+    "md-replace-wait-loop-with-wait_event"
   ],
   "sync_files": [
     "debian/rules.d/config-common.opts",
