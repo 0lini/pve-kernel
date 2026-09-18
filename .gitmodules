@@ -1,6 +1,7 @@
 [submodule "submodules/zfsonlinux"]
 	path = submodules/zfsonlinux
-	url = ../zfsonlinux
+	# Absolute Proxmox git: a GitHub fork has no sibling ../zfsonlinux.
+	url = https://git.proxmox.com/git/zfsonlinux.git
 [submodule "submodules/ubuntu-kernel"]
 	path = submodules/ubuntu-kernel
 	url = ../mirror_ubuntu-kernels
