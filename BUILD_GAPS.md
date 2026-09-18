@@ -42,7 +42,8 @@ Packaging is native arm64 (`make deb` on Apple silicon).
   Debian `6.17.9+deb13.2-asahi`, `zz-update-m1n1` wrote ESP
   `/m1n1/boot.bin`. `/usr/lib/linux-image-6.17.13-1-asahi-pve/apple`
   lists Apple DTBs (`t8103`, `t8112`, `t600x`, `t602x`, …).
-- Hardware boot: `uname -r` reports `6.17.13-1-asahi-pve`.
+- Hardware boot: `uname -r` reports `6.17.13-1-asahi-pve`. Second reboot
+  still came up on this ABI (GRUB default + m1n1 persist).
 
 ## Not completed here
 
