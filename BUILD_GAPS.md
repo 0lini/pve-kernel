@@ -14,20 +14,25 @@ Pinned:
 
 Packaging is native arm64 (`make deb` on Apple silicon).
 
-## Verified (prepare, amd64 host)
+## Verified (prepare)
 
-- `make ARCH=arm64 ubuntu-kernel.prepared`: `debian.asahi-arm` flavour
-  `asahi-arm` export and all 45 `patches/kernel/*.patch` apply. Config has
-  `CONFIG_DRM_ASAHI=m`, `CONFIG_ARM64_16K_PAGES=y`, `CONFIG_RUST=y`,
-  `CONFIG_ARCH_APPLE=y`, `CONFIG_EFI_ZBOOT=y`. `CONFIG_GENDWARFKSYMS` is
-  unset in annotations (enabled from `config-common.opts`).
-- `make ARCH=arm64 debian.prepared`: scripts for `6.17.13-1-asahi-pve`.
-  On an arm64 host, `Recommends: grub-efi-arm64`.
+- `ubuntu-kernel.prepared` on amd64 (`ARCH=arm64`) and on native Debian
+  Asahi: `debian.asahi-arm` flavour `asahi-arm` export and all 45
+  `patches/kernel/*.patch` apply. Config has `CONFIG_DRM_ASAHI=m`,
+  `CONFIG_ARM64_16K_PAGES=y`, `CONFIG_RUST=y`, `CONFIG_ARCH_APPLE=y`,
+  `CONFIG_EFI_ZBOOT=y`. `CONFIG_GENDWARFKSYMS` is unset in annotations
+  (enabled from `config-common.opts`).
+- `debian.prepared`: scripts for `6.17.13-1-asahi-pve`. On an arm64 host,
+  `Recommends: grub-efi-arm64`.
+- Native Asahi `pkg-zfs.prepared` needs host `dh-python` (and
+  `sphinx-common`) *before* `mk-build-deps` on the generated control.
+  Passing a missing `proxmox-kernel-*/debian/control` path makes
+  `mk-build-deps` look up a source package and demand `deb-src` URIs.
 
 ## Not completed here
 
-1. **Native `make deb` on Apple silicon** — this environment is amd64.
-   No hardware boot of this ABI.
+1. **Native `make deb` on Apple silicon** — full package build and
+   hardware boot of this ABI still outstanding.
 2. **ABI file** — no `abi-prev-*-arm64` yet. First headers package skips
    the check; then `make ARCH=arm64 abiupdate`.
 3. **Firmware list** — first modules install skips the check. Commit

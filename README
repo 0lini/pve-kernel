@@ -72,21 +72,30 @@ Debian packaging builds. If unsure you can follow this:
 Installing Build-Dependencies
 -----------------------------
 
-You can either just check the package metadata template `debian/control.in`
-and install the packages listed in the `Build-Depends` section manually
-(replace `debhelper-compat` with just `debhelper`) or use a more automated way
-described below:
+`make build-dir-fresh` prepares OpenZFS by running `dpkg-buildpackage -S` in
+the zfsonlinux tree. That runs `dh clean --with python3,sphinxdoc`, so
+`dh-python` (and `sphinx-common`) must be installed *before* the generated
+`proxmox-kernel-*/debian/control` exists.
 
- # install base build-dependencies and helpers
+Do **not** pass that control path to `mk-build-deps` until `make debian.prepared`
+or a successful `build-dir-fresh` has created it. If the file is missing,
+`mk-build-deps` treats the path as a package name and then needs `deb-src`
+URIs — that is a red herring.
+
+You can either install the `Build-Depends` from `debian/control.in` manually
+(replace `debhelper-compat` with `debhelper`; `rustc` and `rust-src` must be
+the same version, 1.84+) or:
+
+ # helpers plus the ZFS source-prepare addons
  apt update
- apt install devscripts
+ apt install --yes build-essential devscripts equivs dh-python sphinx-common
 
- # create build-directory so that we got final packaging control files from the
- # .in templates generated
- make ARCH=arm64 build-dir-fresh
+ # generate proxmox-kernel-6.17.13/debian/control without touching ZFS
+ make debian.prepared
+ mk-build-deps -ir proxmox-kernel-6.17.13/debian/control
 
- # install build-dependencies (replace BUILD-DIR with actual one)
- mk-build-deps -ir BUILD-DIR/debian/control
+ # now the full tree (kernel copy, patches, ZFS source)
+ make build-dir-fresh
 
 
 Package Build

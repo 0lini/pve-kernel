@@ -139,6 +139,15 @@ $(MODULES).prepared: $(addsuffix .prepared,$(MODULE_DIRS))
 	touch $@
 
 $(ZFSDIR).prepared: $(ZFSONLINUX_SUBMODULE)
+	@# zfs-linux debian/rules clean loads dh --with python3 (needs dh-python)
+	@# before proxmox-kernel-*/debian/control exists for mk-build-deps.
+	@test -e /usr/share/perl5/Debian/Debhelper/Sequence/python3.pm || { \
+	  echo >&2 "error: dh-python is required before preparing ZFS (dpkg-buildpackage -S)."; \
+	  echo >&2 "  apt install dh-python sphinx-common"; \
+	  echo >&2 "or generate control first and install kernel Build-Depends:"; \
+	  echo >&2 "  make debian.prepared && mk-build-deps -ir $(BUILD_DIR)/debian/control"; \
+	  exit 1; \
+	}
 	rm -rf $(BUILD_DIR)/$(MODULES)/$(ZFSDIR) $(BUILD_DIR)/$(MODULES)/tmp $@
 	mkdir -p $(BUILD_DIR)/$(MODULES)/tmp
 	cp -a $(ZFSONLINUX_SUBMODULE)/* $(BUILD_DIR)/$(MODULES)/tmp
