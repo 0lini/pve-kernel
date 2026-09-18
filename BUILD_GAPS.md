@@ -29,10 +29,23 @@ Packaging is native arm64 (`make deb` on Apple silicon).
   Passing a missing `proxmox-kernel-*/debian/control` path makes
   `mk-build-deps` look up a source package and demand `deb-src` URIs.
 
+## Verified (native Debian Asahi)
+
+- `make deb` produced `proxmox-kernel-6.17.13-1-asahi-pve_6.17.13-1_arm64.deb`
+  (and headers/tools/meta/signed-template). First arm64 ABI/fwlist checks
+  skipped as designed. `lintian` on linux-tools reported only
+  `groff-message` on `perf-bench`. `dpkg-genchanges` warns `6.17.13-1` is
+  earlier than stock changelog `6.17.13-21` (debian revision); fine on a
+  machine that never had a PVE 6.17 kernel.
+- `apt install` of the flavour image (not the series meta, which Depends
+  on `pve-firmware`): initramfs built, GRUB found this image alongside
+  Debian `6.17.9+deb13.2-asahi`, `zz-update-m1n1` wrote ESP
+  `/m1n1/boot.bin`. `/usr/lib/linux-image-6.17.13-1-asahi-pve/apple`
+  lists Apple DTBs (`t8103`, `t8112`, `t600x`, `t602x`, …).
+
 ## Not completed here
 
-1. **Native `make deb` on Apple silicon** — full package build and
-   hardware boot of this ABI still outstanding.
+1. **Hardware boot** of ABI `6.17.13-1-asahi-pve` still outstanding.
 2. **ABI file** — no `abi-prev-*-arm64` yet. First headers package skips
    the check; then `make ARCH=arm64 abiupdate`.
 3. **Firmware list** — first modules install skips the check. Commit
