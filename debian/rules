@@ -137,6 +137,17 @@ endif
 	rm -f debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/source
 	rm -f debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/build
 
+	# Apple DTBs for Debian asahi-scripts zz-update-m1n1
+	# (/usr/lib/linux-image-*asahi*/apple). Do not ship that hook here.
+	if [ -d $(KERNEL_SRC)/arch/arm64/boot/dts/apple ]; then \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs/apple; \
+		install -m 0644 $(KERNEL_SRC)/arch/arm64/boot/dts/apple/*.dtb \
+			debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs/apple/; \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/linux-image-$(KVNAME); \
+		ln -s ../modules/$(KVNAME)/dtbs/apple \
+			debian/$(PMX_KERNEL_PKG)/usr/lib/linux-image-$(KVNAME)/apple; \
+	fi
+
 	# copy signing template contents
 	rm -rf debian/${PMX_KERNEL_SIGNING_TEMPLATE_PKG}
 	mkdir -p debian/${PMX_KERNEL_SIGNING_TEMPLATE_PKG}/usr/share/code-signing/${PMX_KERNEL_SIGNING_TEMPLATE_PKG}/source-template/debian
