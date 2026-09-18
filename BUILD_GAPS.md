@@ -44,6 +44,7 @@ Packaging is native arm64 (`make deb` on Apple silicon).
   lists Apple DTBs (`t8103`, `t8112`, `t600x`, `t602x`, …).
 - Hardware boot: `uname -r` reports `6.17.13-1-asahi-pve`. Second reboot
   still came up on this ABI (GRUB default + m1n1 persist).
+- aarch64 KVM guest on this host works.
 
 ## Not completed here
 
