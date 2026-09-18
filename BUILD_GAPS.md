@@ -57,6 +57,9 @@ Packaging is native arm64 (`make deb` on Apple silicon).
   `asahi`, `brcmfmac`, `nvme_apple`. DT usb-pd/phy "Fixed dependency
   cycle" messages are normal.
 
+- OpenZFS 2.4.2-pve1 on 16K (`PAGE_SIZE=16384`): `modprobe zfs` loaded;
+  file-backed pool `test` ONLINE, scrub repaired 0B with 0 errors.
+
 ## Not completed here
 
 1. **ABI file** — no `abi-prev-*-arm64` yet. First headers package skips
@@ -65,5 +68,3 @@ Packaging is native arm64 (`make deb` on Apple silicon).
    `fwlist-previous-arm64` after that if later builds should diff it.
    Apple GPU firmware stays on Debian Asahi (`linux-firmware-asahi`);
    this flavour does not ship `pve-firmware`.
-3. **OpenZFS on 16K hardware** — module is packaged; not yet checked on
-   Apple silicon 16K pages after this boot.
