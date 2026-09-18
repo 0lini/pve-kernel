@@ -4,4 +4,7 @@
 	url = https://git.proxmox.com/git/zfsonlinux.git
 [submodule "submodules/ubuntu-kernel"]
 	path = submodules/ubuntu-kernel
-	url = ../mirror_ubuntu-kernels
+	# Same Ubuntu pin as Proxmox trixie-6.17, plus asahi-6.17.12-1.
+	# Snapshot on this repo; Launchpad linux-asahi-arm has no 6.17.13 tag.
+	url = https://github.com/0lini/pve-kernel.git
+	branch = cursor/asahi-kernel-6.17-0189
