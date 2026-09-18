@@ -12,9 +12,6 @@ proxmox-kernel-6.17 (6.17.13-1) trixie; urgency=medium
     asahi-platform-core. Keep grub-efi-arm64.
   * Point zfsonlinux at https://git.proxmox.com/git/zfsonlinux.git
     (still 2.4.2-pve1).
-  * Ship proxmox-default-kernel and proxmox-default-headers depending on
-    the flavour ABI image/headers so apt install proxmox-ve does not
-    pull pve-firmware. Series meta Suggests pve-firmware.
 
  -- Cursor Agent <cursoragent@cursor.com>  Fri, 18 Sep 2026 07:00:00 +0000
 

@@ -38,15 +38,11 @@ debian/control: $(wildcard debian/*.in)
 	sed -e 's/@@KVNAME@@/$(KVNAME)/g' < debian/proxmox-headers.postinst.in > debian/$(PMX_HEADER_PKG).postinst
 	sed -e 's/@@KVMAJMIN@@/$(KERNEL_MAJMIN)/g' -e 's/@@KVNAME@@/$(KVNAME)/g' < debian/proxmox-kernel-meta.postrm.in > debian/$(PMX_KERNEL_SERIES_PKG).postrm
 	sed -e 's/@@KVMAJMIN@@/$(KERNEL_MAJMIN)/g' -e 's/@@KVNAME@@/$(KVNAME)/g' < debian/proxmox-kernel-meta.postinst.in > debian/$(PMX_KERNEL_SERIES_PKG).postinst
-	sed -e 's/@@KVMAJMIN@@/$(KERNEL_MAJMIN)/g' -e 's/@@KVNAME@@/$(KVNAME)/g' < debian/proxmox-kernel-meta.postrm.in > debian/proxmox-default-kernel.postrm
-	sed -e 's/@@KVMAJMIN@@/$(KERNEL_MAJMIN)/g' -e 's/@@KVNAME@@/$(KVNAME)/g' < debian/proxmox-kernel-meta.postinst.in > debian/proxmox-default-kernel.postinst
 	chmod +x debian/$(PMX_KERNEL_PKG).prerm
 	chmod +x debian/$(PMX_KERNEL_PKG).postrm
 	chmod +x debian/$(PMX_KERNEL_PKG).postinst
 	chmod +x debian/$(PMX_KERNEL_SERIES_PKG).postrm
 	chmod +x debian/$(PMX_KERNEL_SERIES_PKG).postinst
-	chmod +x debian/proxmox-default-kernel.postrm
-	chmod +x debian/proxmox-default-kernel.postinst
 	chmod +x debian/$(PMX_HEADER_PKG).postinst
 	sed -e 's/@KVNAME@/$(KVNAME)/g' -e 's/@KVMAJMIN@/$(KERNEL_MAJMIN)/g' -e 's/@ARCH@/$(DEB_BUILD_ARCH)/g' -e 's/@GRUB_RECOMMENDS@/$(GRUB_RECOMMENDS)/g' < debian/control.in > debian/control
 
@@ -64,7 +60,6 @@ debian/control: $(wildcard debian/*.in)
 build: .compile_mark .tools_compile_mark .modules_compile_mark
 
 install: .install_mark .tools_install_mark .headers_install_mark .usr_headers_install_mark
-	mkdir -p debian/proxmox-default-kernel debian/proxmox-default-headers
 	dh_installdocs -A debian/copyright debian/SOURCE
 	dh_installchangelogs
 	dh_installman
