@@ -1,17 +1,36 @@
 KERNEL SOURCE:
 ==============
 
-We currently use the Ubuntu kernel sources, available from our mirror:
+This flavour uses the Ubuntu Asahi kernel sources (Asahi Linux rebased onto
+Ubuntu kernel packaging) for Apple silicon. It is arm64-only.
 
- https://git.proxmox.com/?p=mirror_ubuntu-kernels.git;a=summary
+ Source of truth (git submodule `submodules/ubuntu-kernel`):
+  Ubuntu-hwe-6.17-6.17.0-42.42 (Linux 6.17.13, same Ubuntu pin as
+  Proxmox trixie-6.17) + Asahi patchset asahi-6.17.12-1, rebuilt per
+  https://github.com/UbuntuAsahi/ubuntu-asahi/wiki/Kernel-packaging
+  Snapshot branch: cursor/asahi-kernel-6.17-0189 on this repo.
 
-Ubuntu will maintain those kernels till:
+ Upstream Ubuntu Asahi tag this was rebuilt from:
+  Ubuntu-asahi-arm-6.17.0-1001.1 (Launchpad linux-asahi-arm)
 
- https://wiki.ubuntu.com/Kernel/Dev/ExtendedStable
- or
- https://pve.proxmox.com/pve-docs/chapter-pve-faq.html#faq-support-table
+ Packaging notes / wiki (not the submodule URL):
+  https://github.com/UbuntuAsahi/ubuntu-asahi/wiki/Kernel-packaging
 
- whatever happens to be earlier.
+ Upstream Asahi Linux kernel releases:
+  https://github.com/AsahiLinux/linux
+
+The submodule path is kept as `submodules/ubuntu-kernel` so the existing
+pve-kernel Makefile (`KERNEL_SRC=ubuntu-kernel`) does not need a rename.
+Package version follows the rebuilt tree top Makefile (`6.17.13`) with
+`KREL_EXTRA=-asahi` (ABI `6.17.13-1-asahi-pve`).
+
+The Ubuntu Asahi PPA is **not** the submodule. Users who want prebuilt Ubuntu
+Asahi debs still install from the PPA; this repository rebuilds the same git
+tree with Proxmox `pve-kernel` packaging (upstream `debian/` is stripped
+during prepare). Base config is exported from `debian.asahi-arm` annotations
+(`DEBIAN=debian.asahi-arm`, flavour `asahi-arm`, arch arm64).
+
+See `BUILD_GAPS.md` for remaining package-build gaps on this pin.
 
 
 Additional/Updated Modules:
@@ -19,9 +38,24 @@ Additional/Updated Modules:
 
 - include native OpenZFS filesystem kernel modules for Linux
 
-  * https://github.com/zfsonlinux/
+  Packaged from Proxmox `zfsonlinux` (submodule, pin 2.4.2-pve1):
+    https://git.proxmox.com/git/zfsonlinux.git
+
+  Upstream OpenZFS:
+    https://github.com/openzfs/zfs
 
   For licensing questions, see: http://open-zfs.org/wiki/Talk:FAQ
+
+Apple DTBs / m1n1:
+------------------
+
+Apple device trees ship under `/usr/lib/modules/<kvname>/dtbs/apple/` with a
+Debian lookup symlink at `/usr/lib/linux-image-<kvname>/apple` so
+`asahi-scripts`' `zz-update-m1n1` glob (`/usr/lib/linux-image-*asahi*/apple`)
+matches (`kvname` contains `-asahi-`). This package does not ship that hook
+and does not Recommend `asahi-platform-core`; a regular Debian Asahi
+install already has `asahi-scripts`, `m1n1`, and `u-boot-asahi`.
+`proxmox-kernel.postinst` already run-parts `/etc/kernel/postinst.d`.
 
 
 BUILD
@@ -49,7 +83,7 @@ described below:
 
  # create build-directory so that we got final packaging control files from the
  # .in templates generated
- make build-dir-fresh
+ make ARCH=arm64 build-dir-fresh
 
  # install build-dependencies (replace BUILD-DIR with actual one)
  mk-build-deps -ir BUILD-DIR/debian/control
@@ -61,9 +95,17 @@ Package Build
  # start the actual build
  make deb
 
-For simple KConfig modifications you can adapt the list in `debian/rules` file.
+This flavour does not build for amd64. On an arm64 host, `make deb` is enough.
+Prepare can still run on another architecture (exports annotations and
+applies patches):
+
+ # prepare only — package builds are native arm64
+ make ARCH=arm64 build-dir-fresh
+
+For simple KConfig modifications you can adapt the lists in
+`debian/rules.d/config-common.opts` and `debian/rules.d/config-arm64.opts`.
 For quick code changes to the actual kernel code you can do them directly in
-the submodule/ubuntu-kernels directory, then re-create the build-directory, e.g.:
+the submodule/ubuntu-kernel directory, then re-create the build-directory, e.g.:
 
  make clean
  # now build again, explicitly creating the build-dir isn't required anymore
@@ -75,9 +117,9 @@ Modify-Build-Test Cycles
 ------------------------
 
 Ideally you avoid the need for doing a full package build and just directly
-build linux from the ubuntu-kernels or the mainline (stable) repo with copying
-over a build-config of a proxmox-kernel to that as .config and then using the
-`make olddefconfig` target.
+build linux from the ubuntu-kernel submodule (Ubuntu Asahi) or the Asahi
+Linux repo with copying over a build-config of a proxmox-kernel to that as
+.config and then using the `make olddefconfig` target.
 
 If you need full package builds you can try to make changes inside the
 BUILD-DIR directly and then continue build from there, e.g., using
@@ -195,12 +237,13 @@ even if both builds are of the same kernel and package version.
 Additional information
 ----------------------
 
-We use the default configuration provided by Ubuntu, and apply
-the following modifications:
+We use Ubuntu Asahi's asahi-arm annotations as the base config, then apply
+the modifications in `debian/rules.d/config-common.opts` and
+`debian/rules.d/config-arm64.opts`. This flavour does not claim amd64 support.
 
-NOTE: For the exact and current list see debian/rules (PVE_CONFIG_OPTS)
+NOTE: For the exact and current list see those files (PMX_CONFIG_OPTS)
 
-- enable INTEL_MEI_WDT=m (to allow disabling via patch)
+- enable INTEL_MEI_WDT=m (to allow disabling via patch; x86-only, unused here)
 
 - disable CONFIG_SND_PCM_OSS (enabled by default in Ubuntu, not needed)
 
