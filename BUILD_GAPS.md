@@ -42,14 +42,15 @@ Packaging is native arm64 (`make deb` on Apple silicon).
   Debian `6.17.9+deb13.2-asahi`, `zz-update-m1n1` wrote ESP
   `/m1n1/boot.bin`. `/usr/lib/linux-image-6.17.13-1-asahi-pve/apple`
   lists Apple DTBs (`t8103`, `t8112`, `t600x`, `t602x`, …).
+- Hardware boot: `uname -r` reports `6.17.13-1-asahi-pve`.
 
 ## Not completed here
 
-1. **Hardware boot** of ABI `6.17.13-1-asahi-pve` still outstanding.
-2. **ABI file** — no `abi-prev-*-arm64` yet. First headers package skips
+1. **ABI file** — no `abi-prev-*-arm64` yet. First headers package skips
    the check; then `make ARCH=arm64 abiupdate`.
-3. **Firmware list** — first modules install skips the check. Commit
+2. **Firmware list** — first modules install skips the check. Commit
    `fwlist-previous-arm64` after that if later builds should diff it.
    Apple GPU firmware stays on Debian Asahi (`linux-firmware-asahi`);
    this flavour does not ship `pve-firmware`.
-4. **OpenZFS on 16K hardware** — untested on Apple silicon 16K pages.
+3. **OpenZFS on 16K hardware** — module is packaged; not yet checked on
+   Apple silicon 16K pages after this boot.
