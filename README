@@ -105,6 +105,28 @@ Package Build
  make deb
 
 This flavour does not build for amd64. On an arm64 host, `make deb` is enough.
+`make deb` also builds `proxmox-default-kernel` and `proxmox-default-headers`
+(Architecture: all) so a custom apt repo can satisfy `apt install proxmox-ve`
+without `pve-firmware`. Publish at least:
+
+  proxmox-kernel-6.17.13-1-asahi-pve_*.deb
+  proxmox-headers-6.17.13-1-asahi-pve_*.deb
+  proxmox-default-kernel_*.deb
+  proxmox-default-headers_*.deb
+
+Do **not** rely on `proxmox-kernel-6.17_*.deb` for that path (stock series
+meta used to Depend on `pve-firmware`). This flavour's series meta only
+Suggests it. Pin the custom origin above any other `proxmox-default-kernel`:
+
+  Package: proxmox-default-kernel proxmox-default-headers
+  Pin: origin your.example
+  Pin-Priority: 1001
+
+Then `apt install proxmox-ve` resolves to ABI `6.17.13-1-asahi-pve`. Keep
+Debian `linux-firmware-asahi` installed. Simulate first:
+
+  apt-get install -s proxmox-ve
+
 Prepare can still run on another architecture (exports annotations and
 applies patches):
 
@@ -175,8 +197,11 @@ git clone git://git.proxmox.com/git/proxmox-ve.git
 proxmox-default-kernel
 ----------------------
 
-Depends on default kernel and header meta package, e.g., proxmox-kernel-6.2 /
-proxmox-headers-6.2.
+Stock package (pve-kernel-meta) depends on the series metas, which then
+Depend on `pve-firmware`. This flavour ships its own
+`proxmox-default-kernel` / `proxmox-default-headers` (same names, version
+tied to this kernel) depending on the ABI image/headers so
+`apt install proxmox-ve` does not pull `pve-firmware`.
 
 git clone git://git.proxmox.com/git/pve-kernel-meta.git
 

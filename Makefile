@@ -66,8 +66,10 @@ META_HDR_DEB=proxmox-headers-$(KERNEL_MAJMIN)_$(DEB_VERSION)_$(ARCH).deb
 USR_HDR_DEB=proxmox-kernel-libc-dev_$(DEB_VERSION)_$(ARCH).deb
 LINUX_TOOLS_DEB=linux-tools-$(KERNEL_MAJMIN)_$(DEB_VERSION)_$(ARCH).deb
 LINUX_TOOLS_DBG_DEB=linux-tools-$(KERNEL_MAJMIN)-dbgsym_$(DEB_VERSION)_$(ARCH).deb
+DEFAULT_KERNEL_DEB=proxmox-default-kernel_$(DEB_VERSION)_all.deb
+DEFAULT_HEADERS_DEB=proxmox-default-headers_$(DEB_VERSION)_all.deb
 
-DEBS=$(DST_DEB) $(META_DEB) $(HDR_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(LINUX_TOOLS_DBG_DEB) $(SIGNED_TEMPLATE_DEB) # $(USR_HDR_DEB)
+DEBS=$(DST_DEB) $(META_DEB) $(HDR_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(LINUX_TOOLS_DBG_DEB) $(SIGNED_TEMPLATE_DEB) $(DEFAULT_KERNEL_DEB) $(DEFAULT_HEADERS_DEB) # $(USR_HDR_DEB)
 
 all: deb
 deb: $(DEBS)
@@ -75,7 +77,7 @@ deb: $(DEBS)
 	#lintian $(HDR_DEB)
 	lintian $(LINUX_TOOLS_DEB)
 
-$(META_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(HDR_DEB) $(DST_DEB) &: $(BUILD_DIR).prepared
+$(META_DEB) $(META_HDR_DEB) $(LINUX_TOOLS_DEB) $(HDR_DEB) $(DST_DEB) $(DEFAULT_KERNEL_DEB) $(DEFAULT_HEADERS_DEB) &: $(BUILD_DIR).prepared
 	cd $(BUILD_DIR); dpkg-buildpackage --jobs=auto -b -uc -us
 
 dsc:

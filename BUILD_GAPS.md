@@ -75,3 +75,7 @@ Packaging is native arm64 (`make deb` on Apple silicon).
    `fwlist-previous-arm64` after that if later builds should diff it.
    Apple GPU firmware stays on Debian Asahi (`linux-firmware-asahi`);
    this flavour does not ship `pve-firmware`.
+3. **Custom apt repo** — `make deb` now emits `proxmox-default-kernel` and
+   `proxmox-default-headers` for `apt install proxmox-ve`. Publish those
+   plus the flavour image/headers and pin the origin; not verified against
+   a live `proxmox-ve` install from that repo.

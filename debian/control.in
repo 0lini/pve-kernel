@@ -123,7 +123,29 @@ Section: admin
 Provides: linux-image-@ARCH@, linux-image-generic, wireguard-modules (=1.0.0), pve-kernel-@KVMAJMIN@
 Replaces: pve-kernel-@KVMAJMIN@
 Priority: optional
-Depends: pve-firmware, proxmox-kernel-@KVNAME@-signed | proxmox-kernel-@KVNAME@, ${misc:Depends},
+Depends: proxmox-kernel-@KVNAME@-signed | proxmox-kernel-@KVNAME@, ${misc:Depends},
+Suggests: pve-firmware,
 Description: Latest Proxmox Kernel Image
  This is a metapackage which will install the latest available
  proxmox kernel from the @KVMAJMIN@ series.
+ Firmware for Apple GPU stays on linux-firmware-asahi; this flavour
+ does not Depend on pve-firmware.
+
+Package: proxmox-default-kernel
+Architecture: all
+Section: admin
+Priority: optional
+Depends: proxmox-kernel-@KVNAME@-signed | proxmox-kernel-@KVNAME@, ${misc:Depends},
+Description: Default kernel for Asahi Proxmox VE
+ Satisfies proxmox-ve's dependency on proxmox-default-kernel using the
+ @KVNAME@ flavour image (not the series meta / pve-firmware).
+ Version follows this kernel source so it sorts above pve-kernel-meta.
+
+Package: proxmox-default-headers
+Architecture: all
+Section: admin
+Priority: optional
+Depends: proxmox-headers-@KVNAME@, ${misc:Depends},
+Description: Default kernel headers for Asahi Proxmox VE
+ Satisfies proxmox-ve / proxmox-default-headers using
+ proxmox-headers-@KVNAME@.
