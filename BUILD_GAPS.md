@@ -44,7 +44,12 @@ Packaging is native arm64 (`make deb` on Apple silicon).
   lists Apple DTBs (`t8103`, `t8112`, `t600x`, `t602x`, …).
 - Hardware boot: `uname -r` reports `6.17.13-1-asahi-pve`. Second reboot
   still came up on this ABI (GRUB default + m1n1 persist).
-- aarch64 KVM guest on this host works.
+- aarch64 KVM guest on this host works. Nested virt is **not** available
+  on this M2: `/dev/kvm` and VHE KVM init succeed, but CPU Features have
+  no `nv`/`nv2` (implementer `0x61`). The `kvm: nv: … trap handlers`
+  lines are KVM registering nested-emulation tables, not FEAT_NV. No
+  `nested` kvm module parameter. KVM also reports 36-bit reduced IPA,
+  non-architectural VGIC, and GICv3 sysreg trapping.
 
 ## Not completed here
 
