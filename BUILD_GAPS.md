@@ -51,11 +51,15 @@ Packaging is native arm64 (`make deb` on Apple silicon).
   `nested` kvm module parameter. KVM also reports 36-bit reduced IPA,
   non-architectural VGIC, and GICv3 sysreg trapping.
 
-- On this ABI (M2 mini, not a Debian 6.17.9 comparison — both
-  `journalctl -k -b 0` and `-b -1` were `6.17.13-1-asahi-pve`): `end0` up
-  on `vmbr0`, `wlp1s0f0` present (DOWN), USB root hubs, modules
-  `asahi`, `brcmfmac`, `nvme_apple`. DT usb-pd/phy "Fixed dependency
-  cycle" messages are normal.
+- On this ABI (M2 mini): `end0` up on `vmbr0`, `wlp1s0f0` present (DOWN),
+  USB root hubs, modules `asahi`, `brcmfmac`, `nvme_apple`, `tg3`.
+  `apple-dcp` modeset 3840x2160@60. brcmfmac firmware name fallbacks
+  then loaded BCM4388. Missing `tigon/tg357766.bin` (no `pve-firmware`);
+  link still 1 Gbps, EEE off. DT usb-pd/phy cycles are normal.
+- Debian `6.17.9+deb13.2-asahi` one-shot via `grub-reboot`: same
+  `lsmod`/`ip link`/`lsusb` set (`asahi`, `brcmfmac`, `nvme_apple`,
+  `tg3`, `end0`/`vmbr0` up, `wlp1s0f0` DOWN, USB root hubs).
+  `journalctl -k` on that boot was empty without `adm`/`systemd-journal`.
 
 - OpenZFS 2.4.2-pve1 on 16K (`PAGE_SIZE=16384`): `modprobe zfs` loaded;
   file-backed pool `test` ONLINE, scrub repaired 0B with 0 errors.
