@@ -60,6 +60,9 @@ Packaging is native arm64 (`make deb` on Apple silicon).
   `lsmod`/`ip link`/`lsusb` set (`asahi`, `brcmfmac`, `nvme_apple`,
   `tg3`, `end0`/`vmbr0` up, `wlp1s0f0` DOWN, USB root hubs).
   `journalctl -k` on that boot was empty without `adm`/`systemd-journal`.
+- `macsmc_hwmon` is present (`CONFIG_SENSORS_MACSMC_HWMON=m`). Power
+  sysfs is `hwmon1` on this ABI (not Debian's `hwmon3`): Total System
+  Power / AC Input / 3.8 V Rail.
 
 - OpenZFS 2.4.2-pve1 on 16K (`PAGE_SIZE=16384`): `modprobe zfs` loaded;
   file-backed pool `test` ONLINE, scrub repaired 0B with 0 errors.
