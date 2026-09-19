@@ -1,34 +1,12 @@
 KERNEL SOURCE:
 ==============
 
-We currently use the Ubuntu Asahi kernel sources for Apple silicon
-(arm64 only):
-
- https://github.com/UbuntuAsahi/ubuntu-asahi/wiki/Kernel-packaging
-
-The kernel lives in git submodule `submodules/ubuntu-kernel`. That path
-is unchanged so the Makefile (`KERNEL_SRC=ubuntu-kernel`) does not need a
-rename.
-
-The tree is Ubuntu-hwe-6.17-6.17.0-42.42 (Linux 6.17.13, the same Ubuntu
-pin as Proxmox trixie-6.17) plus Asahi patchset asahi-6.17.12-1, tag
-Ubuntu-hwe-6.17-6.17.0-42.42-asahi on sibling mirror_ubuntu-kernels:
+We currently use the Ubuntu Asahi kernel sources, available from our mirror:
 
  https://github.com/0lini/mirror_ubuntu-kernels
 
-It was rebuilt from Launchpad linux-asahi-arm tag
-Ubuntu-asahi-arm-6.17.0-1001.1.
-
-Asahi Linux kernel releases:
-
- https://github.com/AsahiLinux/linux
-
-The Ubuntu Asahi PPA is not the submodule. Users who want prebuilt Ubuntu
-Asahi debs still install from the PPA; this repository uses Proxmox
-pve-kernel packaging (upstream `debian/` is stripped during prepare). Base
-config is exported from `debian.asahi-arm` annotations (flavour
-`asahi-arm`, arch arm64). Package version follows the tree top Makefile
-(`6.17.13`) with `KREL_EXTRA=-asahi` (ABI `6.17.13-1-asahi-pve`).
+Tag Ubuntu-hwe-6.17-6.17.0-42.42-asahi (Linux 6.17.13, same Ubuntu pin as
+Proxmox trixie-6.17, plus asahi-6.17.12-1).
 
 
 Additional/Updated Modules:
@@ -36,24 +14,9 @@ Additional/Updated Modules:
 
 - include native OpenZFS filesystem kernel modules for Linux
 
-  Packaged from Proxmox `zfsonlinux` (submodule, pin 2.4.2-pve1):
-    https://git.proxmox.com/git/zfsonlinux.git
-
-  Upstream OpenZFS:
-    https://github.com/openzfs/zfs
+  * https://github.com/zfsonlinux/
 
   For licensing questions, see: http://open-zfs.org/wiki/Talk:FAQ
-
-Apple DTBs / m1n1:
-------------------
-
-Apple device trees ship under `/usr/lib/modules/<kvname>/dtbs/apple/` with a
-Debian lookup symlink at `/usr/lib/linux-image-<kvname>/apple` so
-`asahi-scripts`' `zz-update-m1n1` glob (`/usr/lib/linux-image-*asahi*/apple`)
-matches (`kvname` contains `-asahi-`). This package does not ship that hook
-and does not Recommend `asahi-platform-core`; a regular Debian Asahi
-install already has `asahi-scripts`, `m1n1`, and `u-boot-asahi`.
-`proxmox-kernel.postinst` already run-parts `/etc/kernel/postinst.d`.
 
 
 BUILD
@@ -70,30 +33,21 @@ Debian packaging builds. If unsure you can follow this:
 Installing Build-Dependencies
 -----------------------------
 
-`make build-dir-fresh` prepares OpenZFS by running `dpkg-buildpackage -S` in
-the zfsonlinux tree. That runs `dh clean --with python3,sphinxdoc`, so
-`dh-python` (and `sphinx-common`) must be installed *before* the generated
-`proxmox-kernel-*/debian/control` exists.
+You can either just check the package metadata template `debian/control.in`
+and install the packages listed in the `Build-Depends` section manually
+(replace `debhelper-compat` with just `debhelper`) or use a more automated way
+described below:
 
-Do **not** pass that control path to `mk-build-deps` until `make debian.prepared`
-or a successful `build-dir-fresh` has created it. If the file is missing,
-`mk-build-deps` treats the path as a package name and then needs `deb-src`
-URIs — that is a red herring.
-
-You can either install the `Build-Depends` from `debian/control.in` manually
-(replace `debhelper-compat` with `debhelper`; `rustc` and `rust-src` must be
-the same version, 1.84+) or:
-
- # helpers plus the ZFS source-prepare addons
+ # install base build-dependencies and helpers
  apt update
- apt install --yes build-essential devscripts equivs dh-python sphinx-common
+ apt install devscripts
 
- # generate proxmox-kernel-6.17.13/debian/control without touching ZFS
- make debian.prepared
- mk-build-deps -ir proxmox-kernel-6.17.13/debian/control
-
- # now the full tree (kernel copy, patches, ZFS source)
+ # create build-directory so that we got final packaging control files from the
+ # .in templates generated
  make build-dir-fresh
+
+ # install build-dependencies (replace BUILD-DIR with actual one)
+ mk-build-deps -ir BUILD-DIR/debian/control
 
 
 Package Build
@@ -102,17 +56,9 @@ Package Build
  # start the actual build
  make deb
 
-This flavour does not build for amd64. On an arm64 host, `make deb` is enough.
-Prepare can still run on another architecture (exports annotations and
-applies patches):
-
- # prepare only — package builds are native arm64
- make ARCH=arm64 build-dir-fresh
-
-For simple KConfig modifications you can adapt the lists in
-`debian/rules.d/config-common.opts` and `debian/rules.d/config-arm64.opts`.
+For simple KConfig modifications you can adapt the list in `debian/rules` file.
 For quick code changes to the actual kernel code you can do them directly in
-the submodule/ubuntu-kernel directory, then re-create the build-directory, e.g.:
+the submodule/ubuntu-kernels directory, then re-create the build-directory, e.g.:
 
  make clean
  # now build again, explicitly creating the build-dir isn't required anymore
@@ -124,9 +70,9 @@ Modify-Build-Test Cycles
 ------------------------
 
 Ideally you avoid the need for doing a full package build and just directly
-build linux from the ubuntu-kernel submodule (Ubuntu Asahi) or the Asahi
-Linux repo with copying over a build-config of a proxmox-kernel to that as
-.config and then using the `make olddefconfig` target.
+build linux from the ubuntu-kernels or the mainline (stable) repo with copying
+over a build-config of a proxmox-kernel to that as .config and then using the
+`make olddefconfig` target.
 
 If you need full package builds you can try to make changes inside the
 BUILD-DIR directly and then continue build from there, e.g., using
@@ -244,13 +190,12 @@ even if both builds are of the same kernel and package version.
 Additional information
 ----------------------
 
-We use Ubuntu Asahi's asahi-arm annotations as the base config, then apply
-the modifications in `debian/rules.d/config-common.opts` and
-`debian/rules.d/config-arm64.opts`. This flavour does not claim amd64 support.
+We use the default configuration provided by Ubuntu, and apply
+the following modifications:
 
-NOTE: For the exact and current list see those files (PMX_CONFIG_OPTS)
+NOTE: For the exact and current list see debian/rules (PVE_CONFIG_OPTS)
 
-- enable INTEL_MEI_WDT=m (to allow disabling via patch; x86-only, unused here)
+- enable INTEL_MEI_WDT=m (to allow disabling via patch)
 
 - disable CONFIG_SND_PCM_OSS (enabled by default in Ubuntu, not needed)
 

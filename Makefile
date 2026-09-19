@@ -32,6 +32,7 @@ $(error Unsupported architecture: $(ARCH). Supported: $(SUPPORTED_ARCHS))
 endif
 
 # map Debian arch to kernel source arch directory name
+KERNEL_ARCH_amd64 = x86
 KERNEL_ARCH_arm64 = arm64
 KERNEL_ARCH = $(KERNEL_ARCH_$(ARCH))
 
@@ -113,7 +114,6 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 	rm -rf $(BUILD_DIR)/$(KERNEL_SRC) $@
 	mkdir -p $(BUILD_DIR)
 	cp -a $(KERNEL_SRC_SUBMODULE) $(BUILD_DIR)/$(KERNEL_SRC)
-	# debian.asahi-arm flavour asahi-arm; not debian.master.
 	cd $(BUILD_DIR)/$(KERNEL_SRC); \
 	  DEBIAN=debian.asahi-arm python3 debian/scripts/misc/annotations \
 	    --arch $(ARCH) --flavour $(KERNEL_FLAVOUR) --export >../../$(KERNEL_CFG_ORG)
