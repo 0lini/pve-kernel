@@ -10,9 +10,6 @@ Ubuntu kernel packaging) for Apple silicon. It is arm64-only.
   https://github.com/UbuntuAsahi/ubuntu-asahi/wiki/Kernel-packaging
   Snapshot branch: cursor/asahi-kernel-6.17-0189 on this repo.
 
-How that snapshot was built, and how to rebuild it when Asahi or the
-Proxmox Ubuntu pin moves: `docs/rebuild-asahi-kernel.md`.
-
  Upstream Ubuntu Asahi tag this was rebuilt from:
   Ubuntu-asahi-arm-6.17.0-1001.1 (Launchpad linux-asahi-arm)
 
