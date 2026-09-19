@@ -1,7 +1,6 @@
 include /usr/share/dpkg/pkg-info.mk
 
 # also bump proxmox-kernel-meta if the default MAJ.MIN version changes!
-# Aligned with rebuilt linux-asahi-arm (Ubuntu-hwe-6.17-6.17.0-42.42 + asahi-6.17.12-1).
 KERNEL_MAJ=6
 KERNEL_MIN=17
 KERNEL_PATCHLEVEL=13
@@ -27,17 +26,15 @@ HDRPACKAGE=proxmox-headers-$(KVNAME)
 
 ARCH=$(shell dpkg-architecture -qDEB_BUILD_ARCH)
 
-# Ubuntu Asahi / Asahi Linux targets Apple silicon (arm64). Not an amd64 flavour.
 SUPPORTED_ARCHS = arm64
 ifeq ($(filter $(ARCH),$(SUPPORTED_ARCHS)),)
-$(error Unsupported architecture: $(ARCH). This Asahi flavour supports: $(SUPPORTED_ARCHS))
+$(error Unsupported architecture: $(ARCH). Supported: $(SUPPORTED_ARCHS))
 endif
 
 # map Debian arch to kernel source arch directory name
 KERNEL_ARCH_arm64 = arm64
 KERNEL_ARCH = $(KERNEL_ARCH_$(ARCH))
 
-# Ubuntu Asahi flavour used for annotations export (debian.asahi-arm)
 KERNEL_FLAVOUR=asahi-arm
 
 SKIPABI=0
@@ -116,9 +113,7 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 	rm -rf $(BUILD_DIR)/$(KERNEL_SRC) $@
 	mkdir -p $(BUILD_DIR)
 	cp -a $(KERNEL_SRC_SUBMODULE) $(BUILD_DIR)/$(KERNEL_SRC)
-	# Export Ubuntu Asahi annotations (debian.asahi-arm) as the base .config.
-	# debian/debian.env already sets DEBIAN=debian.asahi-arm; export it explicitly
-	# so prepare does not accidentally pick debian.master.
+	# debian.asahi-arm flavour asahi-arm; not debian.master.
 	cd $(BUILD_DIR)/$(KERNEL_SRC); \
 	  DEBIAN=debian.asahi-arm python3 debian/scripts/misc/annotations \
 	    --arch $(ARCH) --flavour $(KERNEL_FLAVOUR) --export >../../$(KERNEL_CFG_ORG)
@@ -139,15 +134,6 @@ $(MODULES).prepared: $(addsuffix .prepared,$(MODULE_DIRS))
 	touch $@
 
 $(ZFSDIR).prepared: $(ZFSONLINUX_SUBMODULE)
-	@# zfs-linux debian/rules clean loads dh --with python3 (needs dh-python)
-	@# before proxmox-kernel-*/debian/control exists for mk-build-deps.
-	@test -e /usr/share/perl5/Debian/Debhelper/Sequence/python3.pm || { \
-	  echo >&2 "error: dh-python is required before preparing ZFS (dpkg-buildpackage -S)."; \
-	  echo >&2 "  apt install dh-python sphinx-common"; \
-	  echo >&2 "or generate control first and install kernel Build-Depends:"; \
-	  echo >&2 "  make debian.prepared && mk-build-deps -ir $(BUILD_DIR)/debian/control"; \
-	  exit 1; \
-	}
 	rm -rf $(BUILD_DIR)/$(MODULES)/$(ZFSDIR) $(BUILD_DIR)/$(MODULES)/tmp $@
 	mkdir -p $(BUILD_DIR)/$(MODULES)/tmp
 	cp -a $(ZFSONLINUX_SUBMODULE)/* $(BUILD_DIR)/$(MODULES)/tmp
