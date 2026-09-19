@@ -4,7 +4,7 @@ KERNEL SOURCE:
 This flavour uses the Ubuntu Asahi kernel sources (Asahi Linux rebased onto
 Ubuntu kernel packaging) for Apple silicon. It is arm64-only.
 
- Source of truth (git submodule `submodules/ubuntu-kernel`):
+ Kernel submodule (`submodules/ubuntu-kernel`):
   Ubuntu-hwe-6.17-6.17.0-42.42 (Linux 6.17.13, same Ubuntu pin as
   Proxmox trixie-6.17) + Asahi patchset asahi-6.17.12-1, rebuilt per
   https://github.com/UbuntuAsahi/ubuntu-asahi/wiki/Kernel-packaging
