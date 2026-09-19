@@ -2,8 +2,9 @@ proxmox-kernel-6.17 (6.17.13-1) trixie; urgency=medium
 
   * First Asahi arm64 flavour of pve-kernel 6.17.
   * Kernel submodule: Ubuntu-hwe-6.17-6.17.0-42.42 (same Ubuntu pin as
-    Proxmox trixie-6.17) plus asahi-6.17.12-1, snapshot branch
-    cursor/asahi-kernel-6.17-0189. Path stays submodules/ubuntu-kernel.
+    Proxmox trixie-6.17) plus asahi-6.17.12-1, tag
+    Ubuntu-hwe-6.17-6.17.0-42.42-asahi on sibling mirror_ubuntu-kernels.
+    Path stays submodules/ubuntu-kernel.
     Export debian.asahi-arm annotations (flavour asahi-arm). ABI
     6.17.13-1-asahi-pve so asahi-scripts matches linux-image-*asahi*/apple.
   * arm64 only. rustc >= 1.84. Enable GENDWARFKSYMS next to PVE

@@ -11,9 +11,13 @@ is unchanged so the Makefile (`KERNEL_SRC=ubuntu-kernel`) does not need a
 rename.
 
 The tree is Ubuntu-hwe-6.17-6.17.0-42.42 (Linux 6.17.13, the same Ubuntu
-pin as Proxmox trixie-6.17) plus Asahi patchset asahi-6.17.12-1, on branch
-cursor/asahi-kernel-6.17-0189 in this repo. It was rebuilt from Launchpad
-linux-asahi-arm tag Ubuntu-asahi-arm-6.17.0-1001.1.
+pin as Proxmox trixie-6.17) plus Asahi patchset asahi-6.17.12-1, tag
+Ubuntu-hwe-6.17-6.17.0-42.42-asahi on sibling mirror_ubuntu-kernels:
+
+ https://github.com/0lini/mirror_ubuntu-kernels
+
+It was rebuilt from Launchpad linux-asahi-arm tag
+Ubuntu-asahi-arm-6.17.0-1001.1.
 
 Asahi Linux kernel releases:
 
