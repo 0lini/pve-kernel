@@ -30,8 +30,6 @@ tree with Proxmox `pve-kernel` packaging (upstream `debian/` is stripped
 during prepare). Base config is exported from `debian.asahi-arm` annotations
 (`DEBIAN=debian.asahi-arm`, flavour `asahi-arm`, arch arm64).
 
-See `BUILD_GAPS.md` for remaining package-build gaps on this pin.
-
 
 Additional/Updated Modules:
 ---------------------------
