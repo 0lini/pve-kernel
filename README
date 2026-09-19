@@ -1,17 +1,12 @@
 KERNEL SOURCE:
 ==============
 
-We currently use the Ubuntu kernel sources, available from our mirror:
+We currently use the Ubuntu Asahi kernel sources, available from our mirror:
 
- https://git.proxmox.com/?p=mirror_ubuntu-kernels.git;a=summary
+ https://github.com/0lini/mirror_ubuntu-kernels
 
-Ubuntu will maintain those kernels till:
-
- https://wiki.ubuntu.com/Kernel/Dev/ExtendedStable
- or
- https://pve.proxmox.com/pve-docs/chapter-pve-faq.html#faq-support-table
-
- whatever happens to be earlier.
+Tag Ubuntu-hwe-6.17-6.17.0-42.42-asahi (Linux 6.17.13, same Ubuntu pin as
+Proxmox trixie-6.17, plus asahi-6.17.12-1).
 
 
 Additional/Updated Modules:
