@@ -1,34 +1,30 @@
 KERNEL SOURCE:
 ==============
 
-This flavour uses the Ubuntu Asahi kernel sources (Asahi Linux rebased onto
-Ubuntu kernel packaging) for Apple silicon. It is arm64-only.
+We currently use the Ubuntu Asahi kernel sources for Apple silicon
+(arm64 only):
 
- Kernel submodule (`submodules/ubuntu-kernel`):
-  Ubuntu-hwe-6.17-6.17.0-42.42 (Linux 6.17.13, same Ubuntu pin as
-  Proxmox trixie-6.17) + Asahi patchset asahi-6.17.12-1, rebuilt per
-  https://github.com/UbuntuAsahi/ubuntu-asahi/wiki/Kernel-packaging
-  Snapshot branch: cursor/asahi-kernel-6.17-0189 on this repo.
+ https://github.com/UbuntuAsahi/ubuntu-asahi/wiki/Kernel-packaging
 
- Upstream Ubuntu Asahi tag this was rebuilt from:
-  Ubuntu-asahi-arm-6.17.0-1001.1 (Launchpad linux-asahi-arm)
+The kernel lives in git submodule `submodules/ubuntu-kernel`. That path
+is unchanged so the Makefile (`KERNEL_SRC=ubuntu-kernel`) does not need a
+rename.
 
- Packaging notes / wiki (not the submodule URL):
-  https://github.com/UbuntuAsahi/ubuntu-asahi/wiki/Kernel-packaging
+The tree is Ubuntu-hwe-6.17-6.17.0-42.42 (Linux 6.17.13, the same Ubuntu
+pin as Proxmox trixie-6.17) plus Asahi patchset asahi-6.17.12-1, on branch
+cursor/asahi-kernel-6.17-0189 in this repo. It was rebuilt from Launchpad
+linux-asahi-arm tag Ubuntu-asahi-arm-6.17.0-1001.1.
 
- Upstream Asahi Linux kernel releases:
-  https://github.com/AsahiLinux/linux
+Asahi Linux kernel releases:
 
-The submodule path is kept as `submodules/ubuntu-kernel` so the existing
-pve-kernel Makefile (`KERNEL_SRC=ubuntu-kernel`) does not need a rename.
-Package version follows the rebuilt tree top Makefile (`6.17.13`) with
-`KREL_EXTRA=-asahi` (ABI `6.17.13-1-asahi-pve`).
+ https://github.com/AsahiLinux/linux
 
-The Ubuntu Asahi PPA is **not** the submodule. Users who want prebuilt Ubuntu
-Asahi debs still install from the PPA; this repository rebuilds the same git
-tree with Proxmox `pve-kernel` packaging (upstream `debian/` is stripped
-during prepare). Base config is exported from `debian.asahi-arm` annotations
-(`DEBIAN=debian.asahi-arm`, flavour `asahi-arm`, arch arm64).
+The Ubuntu Asahi PPA is not the submodule. Users who want prebuilt Ubuntu
+Asahi debs still install from the PPA; this repository uses Proxmox
+pve-kernel packaging (upstream `debian/` is stripped during prepare). Base
+config is exported from `debian.asahi-arm` annotations (flavour
+`asahi-arm`, arch arm64). Package version follows the tree top Makefile
+(`6.17.13`) with `KREL_EXTRA=-asahi` (ABI `6.17.13-1-asahi-pve`).
 
 
 Additional/Updated Modules:
