@@ -3,14 +3,14 @@ include /usr/share/dpkg/pkg-info.mk
 # also bump proxmox-kernel-meta if the default MAJ.MIN version changes!
 KERNEL_MAJ=7
 KERNEL_MIN=0
-KERNEL_PATCHLEVEL=14
+KERNEL_PATCHLEVEL=12
 # increment KREL for every published package release!
 # rebuild packages with new KREL and run 'make abiupdate'
-KREL=16
+KREL=1
 
 # Use to create a separate package for the same version, like -bpoXY for backport or test-$foo.
 # This way the package can be co-installed with the original, a requirement for major dist updates.
-KREL_EXTRA=
+KREL_EXTRA=-asahi
 # Normally empty, but allows adding a part just for the debian package revision, like ~bpoXY+Z.
 # For the kernel pkg itself it wouldn't matter, but for the meta pkgs it allows major dist upgrades.
 PKG_REV_EXTRA=
@@ -26,7 +26,7 @@ HDRPACKAGE=proxmox-headers-$(KVNAME)
 
 ARCH=$(shell dpkg-architecture -qDEB_HOST_ARCH)
 
-SUPPORTED_ARCHS = amd64 arm64
+SUPPORTED_ARCHS = arm64
 ifeq ($(filter $(ARCH),$(SUPPORTED_ARCHS)),)
 $(error Unsupported architecture: $(ARCH). Supported: $(SUPPORTED_ARCHS))
 endif
@@ -35,6 +35,8 @@ endif
 KERNEL_ARCH_amd64 = x86
 KERNEL_ARCH_arm64 = arm64
 KERNEL_ARCH = $(KERNEL_ARCH_$(ARCH))
+
+KERNEL_FLAVOUR=asahi-arm
 
 SKIPABI=0
 
@@ -113,10 +115,14 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 	mkdir -p $(BUILD_DIR)
 	cp -a $(KERNEL_SRC_SUBMODULE) $(BUILD_DIR)/$(KERNEL_SRC)
 	cd $(BUILD_DIR)/$(KERNEL_SRC); git clean -xdfi
-	cd $(BUILD_DIR)/$(KERNEL_SRC); python3 debian/scripts/misc/annotations --arch $(ARCH) --export >../../$(KERNEL_CFG_ORG)
+	cd $(BUILD_DIR)/$(KERNEL_SRC); \
+	  DEBIAN=debian.asahi-arm python3 debian/scripts/misc/annotations \
+	    --arch $(ARCH) --flavour $(KERNEL_FLAVOUR) --export >../../$(KERNEL_CFG_ORG)
 	cp $(KERNEL_CFG_ORG) $(BUILD_DIR)/$(KERNEL_SRC)/.config
 	sed -i $(BUILD_DIR)/$(KERNEL_SRC)/Makefile -e 's/^EXTRAVERSION.*$$/EXTRAVERSION=$(EXTRAVERSION)/'
-	rm -rf $(BUILD_DIR)/$(KERNEL_SRC)/debian $(BUILD_DIR)/$(KERNEL_SRC)/debian.master
+	rm -rf $(BUILD_DIR)/$(KERNEL_SRC)/debian \
+	       $(BUILD_DIR)/$(KERNEL_SRC)/debian.master \
+	       $(BUILD_DIR)/$(KERNEL_SRC)/debian.asahi-arm
 	set -e; cd $(BUILD_DIR)/$(KERNEL_SRC); \
 	  for patch in ../../patches/kernel/*.patch; do \
 	    echo "applying patch '$$patch'"; \

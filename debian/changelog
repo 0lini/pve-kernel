@@ -1,3 +1,103 @@
+proxmox-kernel-7.0 (7.0.12-1) trixie; urgency=medium
+
+  * First Asahi arm64 flavour of pve-kernel 7.0.
+  * Kernel submodule: Ubuntu-asahi-arm-7.0.0-1002.2 from
+    https://git.launchpad.net/~ubuntu-asahi/+git/linux-asahi-arm
+    (asahi-7.0.13-1 on Ubuntu-7.0.0-28.28). Path stays
+    submodules/ubuntu-kernel.
+    Export debian.asahi-arm annotations (flavour asahi-arm). ABI
+    7.0.12-1-asahi-pve so asahi-scripts matches linux-image-*asahi*/apple.
+  * arm64 only. Enable GENDWARFKSYMS next to PVE MODVERSIONS.
+  * Install Apple DTBs for Debian asahi-scripts. Do not Recommend
+    asahi-platform-core. Keep grub-efi-arm64.
+  * Point zfsonlinux at https://git.proxmox.com/git/zfsonlinux.git
+    (still 2.4.4-pve1).
+
+ -- 0lini <72492483+0lini@users.noreply.github.com>  Mon, 21 Sep 2026 19:30:00 +0200
+
+proxmox-kernel-7.0 (7.0.14-19) trixie; urgency=medium
+
+  * fix #7734: fix regression with misaligned direct I/O (CVE-2026-89584)
+
+  * fix CVE-2026-81000: net: tun: bound receive headroom ("TUNderflow")
+
+ -- Proxmox Support Team <support@proxmox.com>  Fri, 18 Sep 2026 09:31:12 +0200
+
+proxmox-kernel-7.0 (7.0.14-18) trixie; urgency=medium
+
+  * update submodules and patches to current Ubuntu resolute
+    - upstream stable changes 6.18.44-6.18.49 and 7.1.8-7.1.13
+
+  * cherry-picks for the following CVEs from stable 6.18/7.2:
+    - CVE-2026-89761: apparmor: fix out-of-bounds write when null terminating
+      a label vec
+    - CVE-2026-89762: apparmor: fix cred UAF caused by
+      begin_current_label_crit_section()
+    - CVE-2026-89775: Guest-to-Host Escape in KVM/arm64
+    - CVE-2026-89775: KVM: arm64: Handle negative S1 walk levels in VNCR TLB
+      size evaluation
+    - CVE-2026-89776: vxlan: vnifilter: enforce exact length of GROUP/GROUP6
+      attributes
+    - CVE-2026-89777: vfio/pci: clear vdev->msi_perm after freeing it on init
+      failure
+    - CVE-2026-89780: net: qualcomm: rmnet: restore skb->dev on deaggregated
+      frames
+    - CVE-2026-89783: xfrm6: fix out-of-bounds write in xfrm6_input_addr
+    - CVE-2026-89786: ext4: fix out-of-bounds read in ext4_read_inline_dir
+    - CVE-2026-89787: ext4: check dir entry fits before reading the hash
+      trailer in ext4_search_dir
+    - CVE-2026-89790: ipv6: avoid divide by zero in rt6_multipath_rebalance
+    - CVE-2026-89791: perf: Fix use-after-free when perf mmap
+    - CVE-2026-89911: KVM: arm64: Correctly cap TLBI Range to the architural
+      limit
+    - CVE-2026-89912: KVM: arm64: vgic-its: Don't dereference a NULL
+      collection on ITT save
+    - CVE-2026-89913: KVM: arm64: vgic-v3: take an LPI reference in
+      vgic_v3_save_pending_tables
+    - CVE-2026-89914: KVM: arm64: Sign-extend VA for range-based TLBI
+      invalidation
+    - CVE-2026-89915: KVM: arm64: Remove VM-wide VNCR mapping counter
+    - CVE-2026-89916: KVM: arm64: Make VNCR invalidation participate in MMU
+      invalidation retry
+    - CVE-2026-89917: KVM: arm64: Handle VNCR TLB invalidation race with
+      vcpu_put
+    - CVE-2026-89918: KVM: arm64: Correctly handle end of VA space TLBI
+      invalidation
+    - CVE-2026-89927: KVM: x86: hyper-v: Clamp stimer deadline to avoid
+      livelock
+    - CVE-2026-89929: KVM: nVM: Ensure INVVPID is emulated on the correct
+      physical CPU
+    - CVE-2026-89930: KVM: nVMX: Service local TLB flushes on failed nested
+      VM-Enter
+    - CVE-2026-89931: KVM: nVMX: Ensure KVM_REQ_GET_NESTED_STATE_PAGES is
+      cleared on VM-Exit
+    - CVE-2026-89932: KVM: nVMX: Always flush vpid02 on first use
+    - CVE-2026-89987: mm/huge_memory: transfer the pmd dirty bit to the folio
+      on zap
+    - CVE-2026-89990: ceph: lock mutex in ceph_mds_check_access
+    - CVE-2026-90042: ceph: properly decrypt filenames in vmalloc
+    - CVE-2026-90049: net: skbuff: don't skb_tx_error
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 17 Sep 2026 11:39:26 +0200
+
+proxmox-kernel-7.0 (7.0.14-17) trixie; urgency=medium
+
+  * update submodules and patches to Ubuntu-7.0.0-38.38
+    - upstream stable changes from 6.18.43 and 7.1.7
+
+  * cherry-picks for the following CVEs from stable 7.1:
+    CVE-2026-80857, CVE-2026-80904, CVE-2026-80789, CVE-2026-80534,
+    CVE-2026-80804, CVE-2026-80808, CVE-2026-74753, CVE-2026-80830,
+    CVE-2026-80827, CVE-2026-74508, CVE-2026-74507, CVE-2026-80908,
+    CVE-2026-80907, CVE-2026-80540, CVE-2026-80909, CVE-2026-80905,
+    CVE-2026-80906, CVE-2026-80792, CVE-2026-80793, CVE-2026-80847,
+    CVE-2026-80918, CVE-2026-80923, CVE-2026-80924
+
+  * backport 2 fixes for amd gpus, to handle regressions introduced
+    in the stable updates this version includes.
+
+ -- Proxmox Support Team <support@proxmox.com>  Thu, 10 Sep 2026 12:16:37 +0200
+
 proxmox-kernel-7.0 (7.0.14-16) trixie; urgency=medium
 
   * cherry-pick fixes for relevant CVEs, most notable ones:
