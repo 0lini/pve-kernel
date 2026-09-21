@@ -8,6 +8,7 @@ proxmox-kernel-7.0 (7.0.12-1) trixie; urgency=medium
     Export debian.asahi-arm annotations (flavour asahi-arm). ABI
     7.0.12-1-asahi-pve so asahi-scripts matches linux-image-*asahi*/apple.
   * arm64 only. Enable GENDWARFKSYMS next to PVE MODVERSIONS.
+    Ignore git clean after the kernel copy (submodule gitfile).
   * Install Apple DTBs for Debian asahi-scripts. Do not Recommend
     asahi-platform-core. Keep grub-efi-arm64.
   * Point zfsonlinux at https://git.proxmox.com/git/zfsonlinux.git
