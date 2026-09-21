@@ -1,17 +1,12 @@
 KERNEL SOURCE:
 ==============
 
-We currently use the Ubuntu kernel sources, available from our mirror:
+We currently use the Ubuntu Asahi kernel sources:
 
- https://git.proxmox.com/?p=mirror_ubuntu-kernels.git;a=summary
+ https://git.launchpad.net/~ubuntu-asahi/+git/linux-asahi-arm
 
-Ubuntu will maintain those kernels till:
-
- https://wiki.ubuntu.com/Kernel/Dev/ExtendedStable
- or
- https://pve.proxmox.com/pve-docs/chapter-pve-faq.html#faq-support-table
-
- whatever happens to be earlier.
+Tag Ubuntu-asahi-arm-7.0.0-1002.2 (Linux 7.0.12, asahi-7.0.13-1 on
+Ubuntu-7.0.0-28.28).
 
 
 Additional/Updated Modules:
