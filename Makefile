@@ -114,7 +114,7 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 	rm -rf $(BUILD_DIR)/$(KERNEL_SRC) $@
 	mkdir -p $(BUILD_DIR)
 	cp -a $(KERNEL_SRC_SUBMODULE) $(BUILD_DIR)/$(KERNEL_SRC)
-	cd $(BUILD_DIR)/$(KERNEL_SRC); git clean -xdfi
+	cd $(BUILD_DIR)/$(KERNEL_SRC); git clean -xdf || true
 	cd $(BUILD_DIR)/$(KERNEL_SRC); \
 	  DEBIAN=debian.asahi-arm python3 debian/scripts/misc/annotations \
 	    --arch $(ARCH) --flavour $(KERNEL_FLAVOUR) --export >../../$(KERNEL_CFG_ORG)
@@ -125,6 +125,11 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 	       $(BUILD_DIR)/$(KERNEL_SRC)/debian.asahi-arm
 	set -e; cd $(BUILD_DIR)/$(KERNEL_SRC); \
 	  for patch in ../../patches/kernel/*.patch; do \
+	    case $$patch in \
+	    *0063-KVM-arm64-Correctly-handle-end-of-VA-space*|*0065-KVM-arm64-Handle-VNCR-TLB*|*0066-KVM-arm64-Make-VNCR-invalidation*) \
+	      echo "skipping patch '$$patch' (nested.c on Ubuntu Asahi 7.0.12)"; \
+	      continue ;; \
+	    esac; \
 	    echo "applying patch '$$patch'"; \
 	    patch --batch -p1 < "$${patch}"; \
 	  done
