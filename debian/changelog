@@ -1,3 +1,21 @@
+proxmox-kernel-6.17 (6.17.13-1) trixie; urgency=medium
+
+  * First Asahi arm64 flavour of pve-kernel 6.17.
+  * Kernel submodule: Ubuntu-hwe-6.17-6.17.0-42.42 (same Ubuntu pin as
+    Proxmox trixie-6.17) plus asahi-6.17.12-1, tag
+    Ubuntu-hwe-6.17-6.17.0-42.42-asahi on sibling mirror_ubuntu-kernels.
+    Path stays submodules/ubuntu-kernel.
+    Export debian.asahi-arm annotations (flavour asahi-arm). ABI
+    6.17.13-1-asahi-pve so asahi-scripts matches linux-image-*asahi*/apple.
+  * arm64 only. rustc >= 1.84. Enable GENDWARFKSYMS next to PVE
+    MODVERSIONS.
+  * Install Apple DTBs for Debian asahi-scripts. Do not Recommend
+    asahi-platform-core. Keep grub-efi-arm64.
+  * Point zfsonlinux at https://git.proxmox.com/git/zfsonlinux.git
+    (still 2.4.2-pve1).
+
+ -- 0lini <72492483+0lini@users.noreply.github.com>  Mon, 21 Sep 2026 08:34:00 +0200
+
 proxmox-kernel-6.17 (6.17.13-21) trixie; urgency=medium
 
   * fix CVE-2026-64531 "OVSwrap"
