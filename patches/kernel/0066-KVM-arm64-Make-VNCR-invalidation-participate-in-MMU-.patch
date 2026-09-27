@@ -48,7 +48,7 @@ diff --git a/arch/arm64/kvm/nested.c b/arch/arm64/kvm/nested.c
 index a2d11232fe31db564e16bc2ebc5f54a7fb245499..208d0421cf35d1a283a36e91d5d1a2616aefef58 100644
 --- a/arch/arm64/kvm/nested.c
 +++ b/arch/arm64/kvm/nested.c
-@@ -982,6 +982,12 @@ static void kvm_invalidate_vncr_ipa(struct kvm *kvm, u64 start, u64 end)
+@@ -982,5 +982,11 @@ static void kvm_invalidate_vncr_ipa(struct kvm *kvm, u64 start, u64 end)
  	if (!kvm_has_feat(kvm, ID_AA64MMFR4_EL1, NV_frac, NV2_ONLY))
  		return;
  
@@ -58,10 +58,9 @@ index a2d11232fe31db564e16bc2ebc5f54a7fb245499..208d0421cf35d1a283a36e91d5d1a261
 +	 * parallel walk. The notifier itself will have bumped the counter,
 +	 * making sure we rewalk.
 +	 */
- 	kvm_for_each_vncr_tlb(i, vcpu, vt, kvm)
- 		if (vncr_tlb_intersects(vt, vt->wr.pa, start, end - start))
- 			invalidate_vncr(vt);
-@@ -1009,6 +1015,15 @@ static void invalidate_vncr_va(struct kvm *kvm,
+ 	kvm_for_each_vcpu(i, vcpu, kvm) {
+ 		struct vncr_tlb *vt = vcpu->arch.vncr_tlb;
+@@ -1009,5 +1015,14 @@ static void invalidate_vncr_va(struct kvm *kvm,
  
  	lockdep_assert_held_write(&kvm->mmu_lock);
  
@@ -74,9 +73,8 @@ index a2d11232fe31db564e16bc2ebc5f54a7fb245499..208d0421cf35d1a283a36e91d5d1a261
 +	kvm->mmu_invalidate_seq++;
 +	smp_wmb();
 +
- 	kvm_for_each_vncr_tlb(i, vcpu, vt, kvm) {
- 		switch (scope->type) {
- 		case TLBI_ALL:
+ 	kvm_for_each_vcpu(i, vcpu, kvm) {
+ 		struct vncr_tlb *vt = vcpu->arch.vncr_tlb;
 @@ -1331,15 +1346,15 @@ static int kvm_translate_vncr(struct kvm_vcpu *vcpu, bool *is_gmem)
  
  	va =  read_vncr_el2(vcpu);

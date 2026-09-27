@@ -50,7 +50,7 @@ index c71dc68a6b6ba81b399c88261073a48077b76bbe..a2d11232fe31db564e16bc2ebc5f54a7
 --- a/arch/arm64/kvm/nested.c
 +++ b/arch/arm64/kvm/nested.c
 @@ -27,7 +27,7 @@ struct vncr_tlb {
- 	bool			hpa_writable;
+ 	u64			hpa;
  
  	/* -1 when not mapped on a CPU */
 -	int			cpu;
@@ -112,22 +112,21 @@ index c71dc68a6b6ba81b399c88261073a48077b76bbe..a2d11232fe31db564e16bc2ebc5f54a7
  }
  
  static bool vncr_tlb_intersects(struct vncr_tlb *vt, u64 addr,
-@@ -1364,7 +1387,7 @@ static int kvm_translate_vncr(struct kvm_vcpu *vcpu, bool *is_gmem)
+@@ -1364,6 +1387,6 @@ static int kvm_translate_vncr(struct kvm_vcpu *vcpu, bool *is_gmem)
  		vt->hpa = pfn << PAGE_SHIFT;
- 		vt->hpa_writable = writable;
  		vt->valid = true;
 -		vt->cpu = -1;
 +		atomic_set(&vt->cpu, -1);
  
  		kvm_make_request(KVM_REQ_MAP_L1_VNCR_EL2, vcpu);
- 		kvm_release_faultin_page(vcpu->kvm, page, false, vt->wr.pw && vt->hpa_writable);
+ 		kvm_release_faultin_page(vcpu->kvm, page, false, vt->wr.pw);
 @@ -1491,8 +1514,6 @@ static void kvm_map_l1_vncr(struct kvm_vcpu *vcpu)
  	if (vt->wr.nG && get_asid_by_regime(vcpu, TR_EL20) != vt->wr.asid)
  		return;
  
 -	vt->cpu = smp_processor_id();
 -
- 	if (vt->hpa_writable && vt->wr.pw && vt->wr.pr)
+ 	if (vt->wr.pw && vt->wr.pr)
  		prot = PAGE_KERNEL;
  	else if (vt->wr.pr)
 @@ -1507,7 +1528,8 @@ static void kvm_map_l1_vncr(struct kvm_vcpu *vcpu)

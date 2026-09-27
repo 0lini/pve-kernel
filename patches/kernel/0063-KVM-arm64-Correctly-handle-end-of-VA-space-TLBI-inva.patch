@@ -35,14 +35,14 @@ Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
 CVE-2026-89918
 Signed-off-by: Fabian Grünbichler <f.gruenbichler@proxmox.com>
 ---
- arch/arm64/kvm/nested.c | 43 ++++++++++++++++++-----------------------
- 1 file changed, 19 insertions(+), 24 deletions(-)
+ arch/arm64/kvm/nested.c | 39 ++++++++++++++++++++++++---------------
+ 1 file changed, 24 insertions(+), 15 deletions(-)
 
 diff --git a/arch/arm64/kvm/nested.c b/arch/arm64/kvm/nested.c
 index 5ac4719532ca83513fe9418472c90892cac5e46b..f6d4df9ccae4e81a7d4df3c82b2e1f1094145c43 100644
 --- a/arch/arm64/kvm/nested.c
 +++ b/arch/arm64/kvm/nested.c
-@@ -917,6 +917,20 @@ static void invalidate_vncr(struct vncr_tlb *vt)
+@@ -896,6 +896,26 @@ static void invalidate_vncr(struct vncr_tlb *vt)
  		clear_fixmap(vncr_fixmap(vt->cpu));
  }
  
@@ -60,16 +60,19 @@ index 5ac4719532ca83513fe9418472c90892cac5e46b..f6d4df9ccae4e81a7d4df3c82b2e1f10
 +	return !(tlb_end < scope_start || tlb_start > scope_end);
 +}
 +
- /*
-  * VNCR TLB invalidation occurs from MMU notifiers or TLBI instructions, and
-  * either can race against a vcpu not being onlined yet (no pseudo-TLB
-@@ -939,19 +953,9 @@ static void kvm_invalidate_vncr_ipa(struct kvm *kvm, u64 start, u64 end)
- 	if (!kvm_has_feat(kvm, ID_AA64MMFR4_EL1, NV_frac, NV2_ONLY))
- 		return;
++/*
++ * VNCR TLB invalidation occurs from MMU notifiers or TLBI instructions, and
++ * either can race against a vcpu not being onlined yet (no pseudo-TLB
++ * allocated). Similarly, the TLB might be invalid.  Skip those, as they
++ * obviously don't participate in the invalidation at this stage.
++ */
+ static void kvm_invalidate_vncr_ipa(struct kvm *kvm, u64 start, u64 end)
+ {
+ 	struct kvm_vcpu *vcpu;
+@@ -931,15 +951,8 @@ static void kvm_invalidate_vncr_ipa(struct kvm *kvm, u64 start, u64 end)
+ 		if (!vt->valid)
+ 			continue;
  
--	kvm_for_each_vncr_tlb(i, vcpu, vt, kvm) {
--		u64 ipa_start, ipa_end, ipa_size;
--
 -		ipa_size = ttl_to_size(pgshift_level_to_ttl(vt->wi.pgshift,
 -							    vt->wr.level));
 -		ipa_start = vt->wr.pa & ~(ipa_size - 1);
@@ -79,19 +82,15 @@ index 5ac4719532ca83513fe9418472c90892cac5e46b..f6d4df9ccae4e81a7d4df3c82b2e1f10
 -			continue;
 -
 -		invalidate_vncr(vt);
--	}
-+	kvm_for_each_vncr_tlb(i, vcpu, vt, kvm)
 +		if (vncr_tlb_intersects(vt, vt->wr.pa, start, end - start))
 +			invalidate_vncr(vt);
+ 	}
  }
  
- struct s1e2_tlbi_scope {
-@@ -977,28 +981,19 @@ static void invalidate_vncr_va(struct kvm *kvm,
- 	lockdep_assert_held_write(&kvm->mmu_lock);
+@@ -966,25 +986,18 @@ static void invalidate_vncr_va(struct kvm *kvm,
+ 		if (!vt->valid)
+ 			continue;
  
- 	kvm_for_each_vncr_tlb(i, vcpu, vt, kvm) {
--		u64 va_start, va_end, va_size;
--
 -		va_size = ttl_to_size(pgshift_level_to_ttl(vt->wi.pgshift,
 -							   vt->wr.level));
 -		va_start = vt->gva & ~(va_size - 1);
@@ -115,5 +114,5 @@ index 5ac4719532ca83513fe9418472c90892cac5e46b..f6d4df9ccae4e81a7d4df3c82b2e1f10
 -			    va_start >= (scope->va + scope->size))
 +			if (!vncr_tlb_intersects(vt, vt->gva, scope->va, scope->size))
  				continue;
- 			break;
- 
+ 			break; 
+

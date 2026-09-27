@@ -114,7 +114,7 @@ $(KERNEL_SRC).prepared: $(KERNEL_SRC_SUBMODULE) | submodule
 	rm -rf $(BUILD_DIR)/$(KERNEL_SRC) $@
 	mkdir -p $(BUILD_DIR)
 	cp -a $(KERNEL_SRC_SUBMODULE) $(BUILD_DIR)/$(KERNEL_SRC)
-	cd $(BUILD_DIR)/$(KERNEL_SRC); git clean -xdfi
+	cd $(BUILD_DIR)/$(KERNEL_SRC); git clean -xdf || true
 	cd $(BUILD_DIR)/$(KERNEL_SRC); \
 	  DEBIAN=debian.asahi-arm python3 debian/scripts/misc/annotations \
 	    --arch $(ARCH) --flavour $(KERNEL_FLAVOUR) --export >../../$(KERNEL_CFG_ORG)
