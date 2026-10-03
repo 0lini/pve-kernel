@@ -17,7 +17,7 @@ CHANGELOG_DATE:=$(shell dpkg-parsechangelog -SDate)
 CHANGELOG_DATE_UTC_ISO := $(shell date -u -d '$(CHANGELOG_DATE)' +%Y-%m-%dT%H:%MZ)
 
 PMX_KERNEL_PKG=proxmox-kernel-$(KVNAME)
-PMX_KERNEL_SERIES_PKG=proxmox-kernel-$(KERNEL_MAJMIN)
+PMX_KERNEL_SERIES_PKG=proxmox-asahi-kernel-$(KERNEL_MAJMIN)
 PMX_DEBUG_KERNEL_PKG=proxmox-kernel-$(KVNAME)-dbgsym
 PMX_HEADER_PKG=proxmox-headers-$(KVNAME)
 PMX_USR_HEADER_PKG=proxmox-kernel-libc-dev
@@ -47,7 +47,7 @@ debian/control: $(wildcard debian/*.in)
 	sed -e 's/@KVNAME@/$(KVNAME)/g' -e 's/@KVMAJMIN@/$(KERNEL_MAJMIN)/g' -e 's/@ARCH@/$(DEB_BUILD_ARCH)/g' -e 's/@GRUB_RECOMMENDS@/$(GRUB_RECOMMENDS)/g' < debian/control.in > debian/control
 
 	# signing-template
-	sed -e '1 s/proxmox-kernel/proxmox-kernel-signed/' -e '1 s/${DEB_VERSION}/${PMX_KERNEL_SIGNED_VERSION}/' < debian/changelog > debian/signing-template/changelog
+	sed -e '1 s/proxmox-asahi-kernel/proxmox-asahi-kernel-signed/' -e '1 s/${DEB_VERSION}/${PMX_KERNEL_SIGNED_VERSION}/' < debian/changelog > debian/signing-template/changelog
 	sed -e 's/@KVNAME@/${KVNAME}/g' -e 's/@KVMAJMIN@/$(KERNEL_MAJMIN)/g' -e 's/@UNSIGNED_VERSION@/${DEB_VERSION}/g' -e 's/@ARCH@/$(DEB_BUILD_ARCH)/g' < debian/signing-template/control.in > debian/signing-template/control
 	sed -e 's/@KVNAME@/${KVNAME}/g' < debian/signing-template/files.json.in > debian/signing-template/files.json
 	sed -e 's/@KVNAME@/${KVNAME}/g' -e 's/@PKG_VERSION@/${DEB_VERSION}/' < debian/signing-template/rules.in > debian/signing-template/rules
@@ -136,6 +136,16 @@ endif
 	cp debian/proxmox_prevent_autoload.conf debian/$(PMX_KERNEL_PKG)/usr/lib/modprobe.d/proxmox_prevent_autoload_$(PMX_KERNEL_PKG).conf
 	rm -f debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/source
 	rm -f debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/build
+
+	# Apple DTBs for Debian asahi-scripts (/usr/lib/linux-image-*asahi*/apple)
+	if [ -d $(KERNEL_SRC)/arch/arm64/boot/dts/apple ]; then \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs/apple; \
+		install -m 0644 $(KERNEL_SRC)/arch/arm64/boot/dts/apple/*.dtb \
+			debian/$(PMX_KERNEL_PKG)/usr/lib/modules/$(KVNAME)/dtbs/apple/; \
+		install -d -m 0755 debian/$(PMX_KERNEL_PKG)/usr/lib/linux-image-$(KVNAME); \
+		ln -s ../modules/$(KVNAME)/dtbs/apple \
+			debian/$(PMX_KERNEL_PKG)/usr/lib/linux-image-$(KVNAME)/apple; \
+	fi
 
 	# copy signing template contents
 	rm -rf debian/${PMX_KERNEL_SIGNING_TEMPLATE_PKG}

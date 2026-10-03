@@ -1,4 +1,4 @@
-Source: proxmox-kernel-signed-@KVMAJMIN@
+Source: proxmox-asahi-kernel-signed-@KVMAJMIN@
 Section: kernel
 Priority: optional
 Maintainer: Proxmox Support Team <support@proxmox.com>
